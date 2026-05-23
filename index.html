@@ -36,10 +36,13 @@ body{font-family:'Helvetica Neue',Arial,sans-serif;background:var(--bg);color:va
 
 /* BOTTOM NAV (mobile) */
 .bottom-nav{position:fixed;bottom:0;left:0;right:0;height:var(--bottom-h);background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:stretch;z-index:50;padding-bottom:env(safe-area-inset-bottom);}
-.bottom-tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;border:none;background:transparent;color:var(--muted);font-size:10px;font-weight:500;padding:6px 4px;min-height:44px;}
+.bottom-tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;border:none;background:transparent;color:var(--muted);font-size:10px;font-weight:500;padding:6px 4px;min-height:44px;position:relative;}
 .bottom-tab i{font-size:22px;}
 .bottom-tab.active{color:var(--accent);}
 .bottom-tab.active i{font-weight:700;}
+.notif-badge{position:absolute;top:4px;left:calc(50% + 4px);background:var(--danger);color:#fff;font-size:10px;font-weight:700;min-width:17px;height:17px;border-radius:20px;display:none;align-items:center;justify-content:center;border:2px solid var(--surface);padding:0 3px;line-height:1;}
+.nav-tab{position:relative;}
+.nav-notif{position:absolute;top:2px;right:2px;background:var(--danger);color:#fff;font-size:9px;font-weight:700;min-width:15px;height:15px;border-radius:20px;display:none;align-items:center;justify-content:center;padding:0 3px;line-height:1;}
 
 /* PAGES */
 .page{display:none;padding:1rem;padding-bottom:calc(var(--bottom-h) + 1rem);max-width:680px;margin:0 auto;}
@@ -650,6 +653,7 @@ async function doLogin(){
   document.getElementById('main-app').style.display='block';
   setupNav();
   showPage(currentUser.role==='admin'?'dashboard':'operatore');
+  if(currentUser.role==='admin')checkNewOrders();
 }
 function doLogout(){
   stopScanner();
@@ -681,10 +685,10 @@ function setupNav(){
     ];
     // Bottom nav (mobile): mostra solo le prime 5
     const mobileTabs=tabs.slice(0,5);
-    bottomNav.innerHTML=mobileTabs.map(t=>`<button class="bottom-tab" onclick="showPage('${t.p}')" id="btab-${t.p}"><i class="ti ${t.icon}"></i><span>${t.label}</span></button>`).join('');
+    bottomNav.innerHTML=mobileTabs.map(t=>`<button class="bottom-tab" onclick="showPage('${t.p}')" id="btab-${t.p}"><i class="ti ${t.icon}"></i>${t.p==='ordini-admin'?'<span class="notif-badge" id="notif-mobile"></span>':''}<span>${t.label}</span></button>`).join('');
     // Desktop top nav
     navTabs.style.display='flex';
-    navTabs.innerHTML=tabs.map(t=>`<button class="nav-tab" onclick="showPage('${t.p}')" id="ntab-${t.p}"><i class="ti ${t.icon}"></i> <span>${t.label}</span></button>`).join('');
+    navTabs.innerHTML=tabs.map(t=>`<button class="nav-tab" onclick="showPage('${t.p}')" id="ntab-${t.p}"><i class="ti ${t.icon}"></i> <span>${t.label}</span>${t.p==='ordini-admin'?'<span class="nav-notif" id="notif-desktop"></span>':''}</button>`).join('');
     // Aggiungi anche scansione e utenti al bottom nav come overflow
     document.getElementById('op-header').textContent='Scansione (Admin)';
   }else{
@@ -730,10 +734,13 @@ async function loadClients(){
   refreshClientSelects();
 }
 function refreshClientSelects(){
-  const opts='<option value="all">Tutti i clienti</option>'+clientsList.map(c=>`<option value="${c.name}">${c.name}</option>`).join('');
-  ['dash-filter','zone-client-filter'].forEach(id=>{const el=document.getElementById(id);if(el){const cur=el.value;el.innerHTML=opts;el.value=cur;}});
+  const opts='<option value="all">— Tutti i clienti —</option>'+clientsList.map(c=>`<option value="${c.name}">${c.name}</option>`).join('');
+  ['dash-filter','zone-client-filter'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){const cur=el.value;el.innerHTML=opts;if(cur)el.value=cur;}
+  });
   const zm=document.getElementById('zm-client');
-  if(zm)zm.innerHTML=clientsList.map(c=>`<option value="${c.name}">${c.name}</option>`).join('');
+  if(zm&&clientsList.length)zm.innerHTML=clientsList.map(c=>`<option value="${c.name}">${c.name}</option>`).join('');
 }
 function openClientModal(id){
   editClientId=id||null;
@@ -835,26 +842,29 @@ async function loadStorico(){
   const{data}=await sb.from('logs').select('*,users(name)').order('created_at',{ascending:false}).limit(300);
   document.getElementById('storico-list').innerHTML=(data||[]).map(l=>`
     <div class="card" style="padding:.75rem 1rem;margin-bottom:8px;">
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         <div class="zdot ${l.ok?'done':'missing'}"></div>
         <div style="flex:1;min-width:100px;">
           <div style="font-size:13px;font-weight:600;">${l.zone_name||'—'}</div>
           <div style="font-size:11px;color:var(--muted);">${fmtDate(l.created_at)} · ${fmt(l.created_at)} · ${l.users?.name||'—'}</div>
         </div>
-        ${l.photo_url?`<a href="${l.photo_url}" target="_blank" class="btn btn-sm"><i class="ti ti-photo"></i></a>`:''}
+        ${l.photo_url?`<a href="${l.photo_url}" target="_blank" class="btn btn-sm" title="Visualizza"><i class="ti ti-eye"></i></a><a href="${l.photo_url}" download class="btn btn-sm btn-success" title="Scarica"><i class="ti ti-download"></i></a>`:''}
         <span class="badge ${l.ok?'badge-green':'badge-amber'}">${l.ok?'✓':'✗'}</span>
-        <button class="btn btn-sm btn-danger" onclick="deleteLog('${l.id}')"><i class="ti ti-trash"></i></button>
+        <button class="btn btn-sm btn-danger" onclick="deleteLog('${l.id}','${l.photo_url||''}')"><i class="ti ti-trash"></i></button>
       </div>
     </div>`).join('')||'<div style="text-align:center;padding:1rem;color:var(--muted);">Nessuna attività.</div>';
 }
-async function deleteLog(id){
+async function deleteLog(id,photoUrl){
   if(!confirm('Eliminare questa registrazione?'))return;
+  if(photoUrl){const path=photoUrl.split('/foto-pulizie/')[1];if(path)await sb.storage.from('foto-pulizie').remove([decodeURIComponent(path)]);}
   await sb.from('logs').delete().eq('id',id);
   loadStorico();showToast('Eliminato');
 }
 async function doAzzera(){
+  const{data:logs}=await sb.from('logs').select('photo_url').not('photo_url','is',null);
+  if(logs&&logs.length){const paths=logs.map(l=>{const p=l.photo_url.split('/foto-pulizie/')[1];return p?decodeURIComponent(p):null;}).filter(Boolean);if(paths.length)await sb.storage.from('foto-pulizie').remove(paths);}
   await sb.from('logs').delete().neq('id','00000000-0000-0000-0000-000000000000');
-  loadStorico();showToast('Storico azzerato');
+  loadStorico();showToast('Storico e foto azzerati');
 }
 
 // ══ PRODOTTI ══
@@ -897,22 +907,23 @@ function switchOrderTab(tab){
   if(tab==='ricevuti')loadOrdersReceived();else loadProducts();
 }
 async function loadOrdersReceived(){
-  const{data}=await sb.from('orders').select('*,users(name)').order('created_at',{ascending:false});
+  const{data,error}=await sb.from('orders').select('*,users(name)').order('created_at',{ascending:false});
+  if(error){document.getElementById('orders-received').innerHTML='<div style="text-align:center;padding:1rem;color:var(--danger);">Errore caricamento.</div>';return;}
   document.getElementById('orders-received').innerHTML=(data||[]).map(o=>`
     <div class="order-row">
       <input type="checkbox" class="order-check" ${o.evaso?'checked':''} onchange="toggleEvaso('${o.id}',this.checked)">
       <div style="flex:1">
-        <div style="font-size:14px;font-weight:600;${o.evaso?'text-decoration:line-through;color:var(--muted);':''}">${o.product_name||'—'} × ${o.quantity} ${o.unit||''}</div>
+        <div style="font-size:14px;font-weight:600;${o.evaso?'text-decoration:line-through;color:var(--muted);':''}">${o.product_name||'—'} × ${o.quantity||1} ${o.unit||''}</div>
         <div style="font-size:12px;color:var(--muted);">${o.users?.name||'—'} · ${fmtDate(o.created_at)} ${fmt(o.created_at)}</div>
         ${o.note?`<div style="font-size:12px;color:var(--accent);margin-top:2px;"><i class="ti ti-note"></i> ${o.note}</div>`:''}
       </div>
       <span class="badge ${o.evaso?'badge-green':'badge-amber'}" style="flex-shrink:0;">${o.evaso?'Evaso':'Attesa'}</span>
       <button class="btn btn-sm btn-danger" onclick="deleteOrder('${o.id}')" style="margin-left:6px"><i class="ti ti-trash"></i></button>
-    </div>`).join('')||'<div style="text-align:center;padding:1rem;color:var(--muted);">Nessun ordine.</div>';
+    </div>`).join('')||'<div style="text-align:center;padding:1rem;color:var(--muted);">Nessun ordine ricevuto.</div>';
 }
 async function toggleEvaso(id,val){
   await sb.from('orders').update({evaso:val}).eq('id',id);
-  showToast(val?'Evaso':'Riaperto');loadOrdersReceived();loadDashboard();
+  showToast(val?'Evaso':'Riaperto');loadOrdersReceived();loadDashboard();checkNewOrders();
 }
 async function deleteOrder(id){
   if(!confirm('Eliminare?'))return;
@@ -935,11 +946,13 @@ async function loadOpStorico(){
       <span class="badge ${l.ok?'badge-green':'badge-amber'}">${l.ok?'✓':'✗'}</span>
     </div>`).join('');
 }
+let lastLogId=null;
 async function confirmClean(ok){
   document.getElementById('confirm-card').style.display='none';
   const zoneId=document.getElementById('confirm-card').dataset.zoneId;
   const zoneName=document.getElementById('confirm-card').dataset.zoneName;
-  await sb.from('logs').insert({user_id:currentUser.id,zone_id:zoneId,zone_name:zoneName,ok});
+  const{data:logData}=await sb.from('logs').insert({user_id:currentUser.id,zone_id:zoneId,zone_name:zoneName,ok}).select().single();
+  lastLogId=logData?logData.id:null;
   const res=document.getElementById('confirm-result');res.style.display='block';
   document.getElementById('cr-icon').innerHTML=ok?'<i class="ti ti-circle-check" style="color:var(--success)"></i>':'<i class="ti ti-alert-circle" style="color:var(--warning)"></i>';
   document.getElementById('cr-title').textContent=ok?'Registrato!':'Segnalato come non eseguito';
@@ -952,14 +965,28 @@ async function confirmClean(ok){
   ['input-op','input-cam','input-gal'].forEach(id=>document.getElementById(id).value='');
   loadOpStorico();
 }
-function handlePhoto(e,type){
+async function handlePhoto(e,type){
   const file=e.target.files[0];if(!file)return;
+  // Show preview immediately
   const reader=new FileReader();
   reader.onload=ev=>{
     if(type==='op'){document.getElementById('img-op').src=ev.target.result;document.getElementById('prev-op').style.display='block';document.getElementById('cta-op').style.display='none';}
     else{document.getElementById('img-admin').src=ev.target.result;document.getElementById('prev-admin').style.display='block';document.getElementById('cta-admin').style.display='none';}
   };
   reader.readAsDataURL(file);
+  // Upload to Supabase Storage
+  if(!lastLogId)return;
+  const now=new Date();
+  const ts=now.toISOString().replace(/[:.]/g,'-').slice(0,19);
+  const ext=file.name.split('.').pop()||'jpg';
+  const fileName=`${ts}_${lastLogId}.${ext}`;
+  const{data:upData,error}=await sb.storage.from('foto-pulizie').upload(fileName,file,{contentType:file.type,upsert:true});
+  if(!error){
+    const{data:urlData}=sb.storage.from('foto-pulizie').getPublicUrl(fileName);
+    await sb.from('logs').update({photo_url:urlData.publicUrl}).eq('id',lastLogId);
+    showToast('Foto salvata!');
+    loadOpStorico();
+  }else{showToast('Errore upload foto',false);}
 }
 function removePhoto(type){
   if(type==='op'){document.getElementById('prev-op').style.display='none';document.getElementById('cta-op').style.display='flex';document.getElementById('input-op').value='';}
@@ -979,6 +1006,32 @@ async function loadOpProducts(){
   const sel=document.getElementById('op-product-select');
   sel.innerHTML='<option value="">— seleziona —</option>'+(data||[]).map(p=>`<option value="${p.id}" data-unit="${p.unit}">${p.name} (${p.unit})</option>`).join('');
 }
+function playSound(type){
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    const osc=ctx.createOscillator();
+    const gain=ctx.createGain();
+    osc.connect(gain);gain.connect(ctx.destination);
+    if(type==='order'){osc.frequency.setValueAtTime(880,ctx.currentTime);osc.frequency.setValueAtTime(1100,ctx.currentTime+0.1);gain.gain.setValueAtTime(0.3,ctx.currentTime);gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.3);osc.start(ctx.currentTime);osc.stop(ctx.currentTime+0.3);}
+    else if(type==='notify'){osc.frequency.setValueAtTime(660,ctx.currentTime);osc.frequency.setValueAtTime(880,ctx.currentTime+0.15);osc.frequency.setValueAtTime(1100,ctx.currentTime+0.3);gain.gain.setValueAtTime(0.2,ctx.currentTime);gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.5);osc.start(ctx.currentTime);osc.stop(ctx.currentTime+0.5);}
+  }catch(e){}
+}
+let lastOrderCount=0;
+function updateOrderBadge(count){
+  const mobile=document.getElementById('notif-mobile');
+  const desktop=document.getElementById('notif-desktop');
+  if(mobile){mobile.textContent=count>0?count:'';mobile.style.display=count>0?'flex':'none';}
+  if(desktop){desktop.textContent=count>0?count:'';desktop.style.display=count>0?'flex':'none';}
+}
+async function checkNewOrders(){
+  if(!currentUser||currentUser.role!=='admin')return;
+  const{data}=await sb.from('orders').select('id').eq('evaso',false);
+  const count=(data||[]).length;
+  updateOrderBadge(count);
+  if(lastOrderCount>0&&count>lastOrderCount){playSound('notify');showToast('Nuovo ordine ricevuto! 🔔');}
+  lastOrderCount=count;
+}
+setInterval(checkNewOrders,30000);
 async function sendOrder(){
   const sel=document.getElementById('op-product-select');
   const productId=sel.value;if(!productId){showToast('Seleziona un prodotto',false);return;}
@@ -988,17 +1041,23 @@ async function sendOrder(){
   await sb.from('orders').insert({user_id:currentUser.id,product_id:productId,product_name:productName,quantity:opQtyVal,unit,note:note||null,evaso:false});
   sel.value='';document.getElementById('op-note').value='';
   opQtyVal=1;document.getElementById('qty-display').textContent=1;
-  loadOpOrders();showToast('Ordine inviato!');
+  playSound('order');
+  loadOpOrders();showToast('Ordine inviato! ✓');
 }
 async function loadOpOrders(){
-  const{data}=await sb.from('orders').select('*').eq('user_id',currentUser.id).order('created_at',{ascending:false}).limit(20);
+  if(!currentUser)return;
+  const{data,error}=await sb.from('orders').select('*').eq('user_id',currentUser.id).order('created_at',{ascending:false}).limit(20);
   const el=document.getElementById('op-orders-list');
+  if(error){el.innerHTML='<div style="font-size:13px;color:var(--danger);padding:8px 0;">Errore caricamento ordini.</div>';return;}
   if(!(data||[]).length){el.innerHTML='<div style="font-size:13px;color:var(--muted);padding:8px 0;">Nessun ordine ancora.</div>';return;}
   el.innerHTML=data.map(o=>`
     <div class="log-item">
       <div class="zdot ${o.evaso?'done':'missing'}"></div>
       <div class="log-time">${fmt(o.created_at)}</div>
-      <div style="flex:1;font-size:13px;"><div style="font-weight:600;${o.evaso?'text-decoration:line-through;color:var(--muted);':''}">${o.product_name} × ${o.quantity}</div>${o.note?`<div style="font-size:11px;color:var(--muted);">${o.note}</div>`:''}</div>
+      <div style="flex:1;font-size:13px;">
+        <div style="font-weight:600;${o.evaso?'text-decoration:line-through;color:var(--muted);':''}">${o.product_name||'—'} × ${o.quantity||1} ${o.unit||''}</div>
+        ${o.note?`<div style="font-size:11px;color:var(--muted);">${o.note}</div>`:''}
+      </div>
       <span class="badge ${o.evaso?'badge-green':'badge-amber'}">${o.evaso?'Evaso':'Attesa'}</span>
     </div>`).join('');
 }
