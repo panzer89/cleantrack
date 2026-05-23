@@ -979,7 +979,6 @@ async function condividiOrdiniPDF(){
   const{jsPDF}=window.jspdf;
   const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
   const today=new Date().toLocaleDateString('it-IT');
-  // Header
   doc.setFillColor(26,92,58);
   doc.rect(0,0,210,18,'F');
   doc.setTextColor(255,255,255);
@@ -987,7 +986,6 @@ async function condividiOrdiniPDF(){
   doc.text('CleanTrack — Ordini',14,12);
   doc.setFontSize(10);doc.setFont('helvetica','normal');
   doc.text('Estratto il '+today,196,12,{align:'right'});
-  // Table
   const rows=data.map(o=>[
     fmtDate(o.created_at)+' '+fmt(o.created_at),
     o.users?.name||'—',
@@ -1006,21 +1004,18 @@ async function condividiOrdiniPDF(){
     columnStyles:{0:{cellWidth:28},1:{cellWidth:28},2:{cellWidth:38},3:{cellWidth:18},4:{cellWidth:48},5:{cellWidth:22}},
     margin:{left:14,right:14},
   });
-  // Footer
   const pages=doc.internal.getNumberOfPages();
   for(let i=1;i<=pages;i++){
     doc.setPage(i);
     doc.setFontSize(8);doc.setTextColor(150,150,150);
     doc.text('cleantrack-amber.vercel.app — pag. '+i+'/'+pages,105,290,{align:'center'});
   }
-  // Share
   const pdfBlob=doc.output('blob');
   const fileName='CleanTrack_Ordini_'+today.replace(/\//g,'-')+'.pdf';
   const file=new File([pdfBlob],fileName,{type:'application/pdf'});
   if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
     try{await navigator.share({title:'Ordini CleanTrack',files:[file]});return;}catch(e){}
   }
-  // Fallback: download
   const url=URL.createObjectURL(pdfBlob);
   const a=document.createElement('a');a.href=url;a.download=fileName;a.click();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
