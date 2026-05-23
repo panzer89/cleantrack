@@ -12,6 +12,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
 <style>
 :root{--bg:#f5f5f0;--surface:#fff;--border:#e0ddd5;--text:#1a1a18;--muted:#7a7a72;--accent:#1a5c3a;--accent-light:#e8f2ec;--danger:#c0392b;--danger-light:#fdf0ee;--warning:#d68910;--warning-light:#fef9e7;--success:#1a7a42;--success-light:#eafaf1;--radius:12px;--radius-sm:8px;--nav-h:60px;--bottom-h:64px;}
@@ -285,7 +287,10 @@ textarea.form-input{resize:none;}
     </div>
     <div id="tab-ricevuti" style="display:none;">
       <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
-        <button class="btn btn-success btn-sm" onclick="exportOrdiniExcel()"><i class="ti ti-file-spreadsheet"></i> Esporta Excel</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-success btn-sm" onclick="exportOrdiniExcel()"><i class="ti ti-file-spreadsheet"></i> Excel</button>
+          <button class="btn btn-primary btn-sm" onclick="condividiOrdiniPDF()"><i class="ti ti-share"></i> Invia PDF</button>
+        </div>
       </div>
       <div id="orders-received"></div>
     </div>
@@ -533,6 +538,7 @@ textarea.form-input{resize:none;}
 <script>
 const SUPABASE_URL='https://cpmtzvgtmyzbzhboyutk.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_QMmAkOPX4DU6Kfvcx2HDmA_LLaFXaA9';const APP_PIN='4114';
+const APP_PIN='4114';
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 
 let currentUser=null,dashFilter='all',zoneFilter='all',editZoneId=null,editUserId=null,editProductId=null,editClientId=null;
@@ -966,6 +972,59 @@ async function exportOrdiniExcel(){
   const today=new Date().toLocaleDateString('it-IT').replace(/\//g,'-');
   XLSX.writeFile(wb,`CleanTrack_Ordini_${today}.xlsx`);
   showToast('Excel ordini scaricato!');
+}
+async function condividiOrdiniPDF(){
+  const{data,error}=await sb.from('orders').select('*,users(name)').order('created_at',{ascending:false});
+  if(error||!data||!data.length){showToast('Nessun ordine da condividere',false);return;}
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const today=new Date().toLocaleDateString('it-IT');
+  // Header
+  doc.setFillColor(26,92,58);
+  doc.rect(0,0,210,18,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(14);doc.setFont('helvetica','bold');
+  doc.text('CleanTrack — Ordini',14,12);
+  doc.setFontSize(10);doc.setFont('helvetica','normal');
+  doc.text('Estratto il '+today,196,12,{align:'right'});
+  // Table
+  const rows=data.map(o=>[
+    fmtDate(o.created_at)+' '+fmt(o.created_at),
+    o.users?.name||'—',
+    o.product_name||'—',
+    (o.quantity||1)+' '+(o.unit||''),
+    o.note||'',
+    o.evaso?'Evaso':'In attesa'
+  ]);
+  doc.autoTable({
+    startY:22,
+    head:[['Data/Ora','Operatore','Prodotto','Qtà','Nota','Stato']],
+    body:rows,
+    styles:{fontSize:9,cellPadding:3},
+    headStyles:{fillColor:[26,92,58],textColor:255,fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[232,242,236]},
+    columnStyles:{0:{cellWidth:28},1:{cellWidth:28},2:{cellWidth:38},3:{cellWidth:18},4:{cellWidth:48},5:{cellWidth:22}},
+    margin:{left:14,right:14},
+  });
+  // Footer
+  const pages=doc.internal.getNumberOfPages();
+  for(let i=1;i<=pages;i++){
+    doc.setPage(i);
+    doc.setFontSize(8);doc.setTextColor(150,150,150);
+    doc.text('cleantrack-amber.vercel.app — pag. '+i+'/'+pages,105,290,{align:'center'});
+  }
+  // Share
+  const pdfBlob=doc.output('blob');
+  const fileName='CleanTrack_Ordini_'+today.replace(/\//g,'-')+'.pdf';
+  const file=new File([pdfBlob],fileName,{type:'application/pdf'});
+  if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+    try{await navigator.share({title:'Ordini CleanTrack',files:[file]});return;}catch(e){}
+  }
+  // Fallback: download
+  const url=URL.createObjectURL(pdfBlob);
+  const a=document.createElement('a');a.href=url;a.download=fileName;a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  showToast('PDF pronto!');
 }
 async function toggleEvaso(id,val){
   await sb.from('orders').update({evaso:val}).eq('id',id);
