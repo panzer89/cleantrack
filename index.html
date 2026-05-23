@@ -283,7 +283,12 @@ textarea.form-input{resize:none;}
       </div>
       <div id="product-list"></div>
     </div>
-    <div id="tab-ricevuti" style="display:none;"><div id="orders-received"></div></div>
+    <div id="tab-ricevuti" style="display:none;">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
+        <button class="btn btn-success btn-sm" onclick="exportOrdiniExcel()"><i class="ti ti-file-spreadsheet"></i> Esporta Excel</button>
+      </div>
+      <div id="orders-received"></div>
+    </div>
   </div>
 
   <!-- CLIENTI -->
@@ -639,15 +644,30 @@ async function showSugg(){
 }
 function hideSugg(){document.getElementById('login-sugg').style.display='none';}
 function selectUser(u){document.getElementById('login-user').value=u;hideSugg();document.getElementById('login-pass').focus();}
-function loadSavedCreds(){try{const u=localStorage.getItem('ct_u'),p=localStorage.getItem('ct_p');if(u&&p){document.getElementById('login-user').value=u;document.getElementById('login-pass').value=p;document.getElementById('remember-me').checked=true;}}catch(e){}}
+function saveCreds(u,p){try{localStorage.setItem('ct_u',u);localStorage.setItem('ct_p',p);sessionStorage.setItem('ct_u',u);sessionStorage.setItem('ct_p',p);}catch(e){}}
+function clearCreds(){try{localStorage.removeItem('ct_u');localStorage.removeItem('ct_p');sessionStorage.removeItem('ct_u');sessionStorage.removeItem('ct_p');}catch(e){}}
+function getSavedCreds(){try{return{u:localStorage.getItem('ct_u')||sessionStorage.getItem('ct_u'),p:localStorage.getItem('ct_p')||sessionStorage.getItem('ct_p')};}catch(e){return{u:null,p:null};}}
+function loadSavedCreds(){const{u,p}=getSavedCreds();if(u&&p){document.getElementById('login-user').value=u;document.getElementById('login-pass').value=p;document.getElementById('remember-me').checked=true;}}
+async function tryAutoLogin(){
+  const{u,p}=getSavedCreds();
+  if(!u||!p)return;
+  const{data,error}=await sb.from('users').select('*').eq('username',u).eq('password',p).single();
+  if(error||!data)return;
+  currentUser=data;
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('main-app').style.display='block';
+  setupNav();
+  showPage(currentUser.role==='admin'?'dashboard':'operatore');
+  if(currentUser.role==='admin')checkNewOrders();
+}
 async function doLogin(){
   const u=document.getElementById('login-user').value.trim().toLowerCase();
   const p=document.getElementById('login-pass').value;
   const{data,error}=await sb.from('users').select('*').eq('username',u).eq('password',p).single();
   if(error||!data){document.getElementById('login-err').style.display='block';return;}
   document.getElementById('login-err').style.display='none';
-  if(document.getElementById('remember-me').checked){try{localStorage.setItem('ct_u',u);localStorage.setItem('ct_p',p);}catch(e){}}
-  else{try{localStorage.removeItem('ct_u');localStorage.removeItem('ct_p');}catch(e){}}
+  if(document.getElementById('remember-me').checked)saveCreds(u,p);
+  else clearCreds();
   currentUser=data;
   document.getElementById('login-screen').style.display='none';
   document.getElementById('main-app').style.display='block';
@@ -657,12 +677,14 @@ async function doLogin(){
 }
 function doLogout(){
   stopScanner();
+  clearCreds();
   currentUser=null;
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('main-app').style.display='none';
   document.getElementById('login-pass').value='';
+  document.getElementById('login-user').value='';
   document.getElementById('login-err').style.display='none';
-  loadSavedCreds();
+  document.getElementById('remember-me').checked=false;
 }
 
 // ══ NAV ══
@@ -848,7 +870,7 @@ async function loadStorico(){
           <div style="font-size:13px;font-weight:600;">${l.zone_name||'—'}</div>
           <div style="font-size:11px;color:var(--muted);">${fmtDate(l.created_at)} · ${fmt(l.created_at)} · ${l.users?.name||'—'}</div>
         </div>
-        ${l.photo_url?`<a href="${l.photo_url}" target="_blank" class="btn btn-sm" title="Visualizza"><i class="ti ti-eye"></i></a><a href="${l.photo_url}" download class="btn btn-sm btn-success" title="Scarica"><i class="ti ti-download"></i></a>`:''}
+        ${l.photo_url?`<a href="${l.photo_url}" target="_blank" class="btn btn-sm" title="Visualizza foto"><i class="ti ti-eye"></i> Foto</a>`:''}
         <span class="badge ${l.ok?'badge-green':'badge-amber'}">${l.ok?'✓':'✗'}</span>
         <button class="btn btn-sm btn-danger" onclick="deleteLog('${l.id}','${l.photo_url||''}')"><i class="ti ti-trash"></i></button>
       </div>
@@ -920,6 +942,30 @@ async function loadOrdersReceived(){
       <span class="badge ${o.evaso?'badge-green':'badge-amber'}" style="flex-shrink:0;">${o.evaso?'Evaso':'Attesa'}</span>
       <button class="btn btn-sm btn-danger" onclick="deleteOrder('${o.id}')" style="margin-left:6px"><i class="ti ti-trash"></i></button>
     </div>`).join('')||'<div style="text-align:center;padding:1rem;color:var(--muted);">Nessun ordine ricevuto.</div>';
+}
+async function exportOrdiniExcel(){
+  const{data,error}=await sb.from('orders').select('*,users(name)').order('created_at',{ascending:false});
+  if(error||!data||!data.length){showToast('Nessun ordine da esportare',false);return;}
+  const wsData=[
+    ['Data','Ora','Operatore','Prodotto','Quantità','Unità','Nota','Stato'],
+    ...data.map(o=>[
+      fmtDate(o.created_at),
+      fmt(o.created_at),
+      o.users?.name||'—',
+      o.product_name||'—',
+      o.quantity||1,
+      o.unit||'',
+      o.note||'',
+      o.evaso?'Evaso':'In attesa'
+    ])
+  ];
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet(wsData);
+  ws['!cols']=[{wch:12},{wch:8},{wch:18},{wch:22},{wch:10},{wch:10},{wch:22},{wch:12}];
+  XLSX.utils.book_append_sheet(wb,ws,'Ordini');
+  const today=new Date().toLocaleDateString('it-IT').replace(/\//g,'-');
+  XLSX.writeFile(wb,`CleanTrack_Ordini_${today}.xlsx`);
+  showToast('Excel ordini scaricato!');
 }
 async function toggleEvaso(id,val){
   await sb.from('orders').update({evaso:val}).eq('id',id);
@@ -1150,6 +1196,7 @@ async function exportExcel(){
 
 // ══ INIT ══
 loadSavedCreds();
+tryAutoLogin();
 </script>
 </body>
 </html>
