@@ -186,6 +186,21 @@ body{font-family:'Helvetica Neue',Arial,sans-serif;background:var(--bg);color:va
 }
 select.form-input{cursor:pointer;}
 textarea.form-input{resize:none;}
+/* MESSAGES */
+.msg-bubble{padding:10px 14px;border-radius:16px;max-width:78%;font-size:13px;line-height:1.45;word-break:break-word;}
+.msg-out{background:var(--accent);color:#fff;border-radius:16px 16px 4px 16px;margin-left:auto;}
+.msg-in{background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:16px 16px 16px 4px;}
+.msg-row{display:flex;margin-bottom:10px;}
+.msg-row.out{justify-content:flex-end;}
+.msg-row.in{justify-content:flex-start;}
+.msg-meta{font-size:10px;color:var(--muted);margin-top:3px;text-align:right;}
+.msg-meta.in{text-align:left;}
+.quick-btns{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;}
+.quick-btn{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--surface);color:var(--text);}
+.quick-btn:active{background:var(--accent-light);color:var(--accent);}
+.msg-popup{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:300;display:flex;align-items:center;justify-content:center;padding:1rem;}
+.msg-popup-card{background:var(--surface);border-radius:var(--radius);padding:1.5rem;max-width:360px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.msg-chat-area{height:320px;overflow-y:auto;padding:.75rem;background:var(--bg);border-radius:var(--radius-sm);border:1px solid var(--border);margin-bottom:12px;}
 </style>
 </head>
 <body>
@@ -267,7 +282,7 @@ textarea.form-input{resize:none;}
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn btn-success btn-sm" id="btn-excel-storico" onclick="exportExcel()"><i class="ti ti-file-spreadsheet"></i> Excel</button>
         <button class="btn btn-primary btn-sm" id="btn-scarica-tutti" style="display:none;" onclick="scaricaTuttiReport()"><i class="ti ti-download"></i> Scarica tutti</button>
-        <button class="btn btn-danger btn-sm" onclick="startAzzera()"><i class="ti ti-trash"></i> Azzera</button>
+        <button class="btn btn-danger btn-sm" onclick="startAzzera()"><i class="ti ti-trash"></i> Azzera tutto</button>
       </div>
     </div>
     <div class="tab-pills">
@@ -456,8 +471,70 @@ textarea.form-input{resize:none;}
     <div id="user-list"></div>
   </div>
 
+  <!-- MESSAGGI -->
+  <div id="page-messaggi" class="page" style="padding:0;">
+    <!-- Lista conversazioni -->
+    <div id="msg-list-view" style="max-width:520px;margin:0 auto;padding:1rem;">
+      <div style="font-size:16px;font-weight:700;margin-bottom:1rem;display:flex;align-items:center;gap:8px;">
+        <i class="ti ti-message-circle" style="color:var(--accent)"></i> Chat
+      </div>
+      <div id="msg-conv-list"></div>
+      <!-- Nuovo messaggio (admin) -->
+      <div id="msg-new-btn-wrap" style="display:none;margin-top:12px;">
+        <button class="btn btn-primary btn-block" onclick="openNewChat()"><i class="ti ti-plus"></i> Nuova chat</button>
+      </div>
+    </div>
+    <!-- Schermata chat singola -->
+    <div id="msg-chat-view" style="display:none;max-width:520px;margin:0 auto;display:none;flex-direction:column;height:calc(100vh - var(--nav-h) - var(--bottom-h));">
+      <div style="display:flex;align-items:center;gap:10px;padding:.75rem 1rem;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:var(--nav-h);">
+        <button class="btn btn-sm" onclick="backToList()"><i class="ti ti-arrow-left"></i></button>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:700;" id="chat-header-name"></div>
+          <div style="font-size:11px;color:var(--muted);" id="chat-header-sub"></div>
+        </div>
+        <div id="btn-delete-chat" style="display:none;">
+          <button class="btn btn-sm btn-danger" onclick="startDeleteChat()"><i class="ti ti-trash"></i></button>
+        </div>
+      </div>
+      <div class="msg-chat-area" id="msg-chat-area" style="flex:1;height:auto;max-height:calc(100vh - 260px);"></div>
+      <div style="border-top:1px solid var(--border);padding:.75rem;background:var(--surface);">
+        <div style="display:flex;gap:8px;align-items:flex-end;">
+          <textarea class="form-input" id="msg-input" rows="2" placeholder="Scrivi un messaggio..." style="flex:1;resize:none;padding:10px 12px;font-size:14px;" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage();}"></textarea>
+          <button class="btn btn-primary" onclick="sendMessage()" style="padding:10px 14px;"><i class="ti ti-send"></i></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- BOTTOM NAV -->
   <div class="bottom-nav" id="bottom-nav"></div>
+  
+  <!-- MODAL VEDI TUTTA GIORNATA -->
+  <div class="modal-overlay" id="giornata-modal">
+    <div class="modal" style="max-width:520px;">
+      <div class="modal-title" id="giornata-modal-title">Attività del giorno</div>
+      <div id="giornata-modal-body" style="max-height:60vh;overflow-y:auto;"></div>
+      <button class="btn btn-block" style="margin-top:1rem;" onclick="closeModal('giornata-modal')">Chiudi</button>
+    </div>
+  </div>
+  
+  <!-- POPUP MESSAGGIO OPERATORE -->
+  <div class="msg-popup" id="msg-popup" style="display:none;">
+    <div class="msg-popup-card">
+      <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:4px;" id="popup-from"></div>
+      <div style="font-size:15px;font-weight:600;margin-bottom:12px;color:var(--text);" id="popup-text"></div>
+      <div class="quick-btns">
+        <button class="quick-btn" onclick="replyQuick('OK ✓')">OK ✓</button>
+        <button class="quick-btn" onclick="replyQuick('No ✗')">No ✗</button>
+        <button class="quick-btn" onclick="replyQuick('Altro...')">Altro...</button>
+      </div>
+      <div id="popup-reply-wrap" style="display:none;margin-top:10px;">
+        <textarea class="form-input" id="popup-reply-text" rows="2" placeholder="Scrivi risposta..."></textarea>
+        <button class="btn btn-primary btn-block" style="margin-top:8px;" onclick="sendPopupReply()"><i class="ti ti-send"></i> Invia risposta</button>
+      </div>
+      <button class="btn btn-block" style="margin-top:10px;" onclick="closePopup()">Chiudi</button>
+    </div>
+  </div>
 </div>
 
 <!-- MODALI -->
@@ -574,7 +651,7 @@ function fmtDate(dt){return new Date(dt).toLocaleDateString('it-IT');}
 
 // ══ PIN ══
 function startAzzera(){
-  if(!confirm('Sei sicuro di voler azzerare tutto lo storico?'))return;
+  if(!confirm('Sei sicuro di voler azzerare tutto? Verranno eliminati storico, ordini, messaggi e foto.'))return;
   pinBuffer='';updatePinDots();
   document.getElementById('pin-err').style.display='none';
   document.getElementById('pin-modal-title').innerHTML='<i class="ti ti-lock"></i> PIN di sicurezza';
@@ -684,6 +761,9 @@ async function tryAutoLogin(){
   setupNav();
   showPage(currentUser.role==='admin'?'dashboard':'operatore');
   if(currentUser.role==='admin')checkNewOrders();
+  lastMsgCount=-1;
+  setInterval(checkNewMessages,30000);
+  setTimeout(checkNewMessages,2000);
 }
 async function doLogin(){
   const u=document.getElementById('login-user').value.trim().toLowerCase();
@@ -699,6 +779,9 @@ async function doLogin(){
   setupNav();
   showPage(currentUser.role==='admin'?'dashboard':'operatore');
   if(currentUser.role==='admin')checkNewOrders();
+  lastMsgCount=-1;
+  setInterval(checkNewMessages,30000);
+  setTimeout(checkNewMessages,2000);
 }
 function doLogout(){
   stopScanner();
@@ -727,15 +810,16 @@ function setupNav(){
       {p:'storico',icon:'ti-history',label:'Storico'},
       {p:'ordini-admin',icon:'ti-shopping-cart',label:'Ordini'},
       {p:'clienti',icon:'ti-building',label:'Clienti'},
+      {p:'messaggi',icon:'ti-message-circle',label:'Chat'},
       {p:'operatore',icon:'ti-scan',label:'Scansione'},
       {p:'utenti',icon:'ti-users',label:'Utenti'},
     ];
     // Bottom nav (mobile): mostra solo le prime 5
     const mobileTabs=tabs.slice(0,5);
-    bottomNav.innerHTML=mobileTabs.map(t=>`<button class="bottom-tab" onclick="showPage('${t.p}')" id="btab-${t.p}"><i class="ti ${t.icon}"></i>${t.p==='ordini-admin'?'<span class="notif-badge" id="notif-mobile"></span>':''}<span>${t.label}</span></button>`).join('');
+    bottomNav.innerHTML=mobileTabs.map(t=>`<button class="bottom-tab" onclick="showPage('${t.p}')" id="btab-${t.p}"><i class="ti ${t.icon}"></i>${t.p==='ordini-admin'?'<span class="notif-badge" id="notif-mobile"></span>':''}${t.p==='messaggi'?'<span class="notif-badge" id="msg-notif-mobile"></span>':''}<span>${t.label}</span></button>`).join('');
     // Desktop top nav
     navTabs.style.display='flex';
-    navTabs.innerHTML=tabs.map(t=>`<button class="nav-tab" onclick="showPage('${t.p}')" id="ntab-${t.p}"><i class="ti ${t.icon}"></i> <span>${t.label}</span>${t.p==='ordini-admin'?'<span class="nav-notif" id="notif-desktop"></span>':''}</button>`).join('');
+    navTabs.innerHTML=tabs.map(t=>`<button class="nav-tab" onclick="showPage('${t.p}')" id="ntab-${t.p}"><i class="ti ${t.icon}"></i> <span>${t.label}</span>${t.p==='ordini-admin'?'<span class="nav-notif" id="notif-desktop"></span>':''}${t.p==='messaggi'?'<span class="nav-notif" id="msg-notif-desktop"></span>':''}</button>`).join('');
     // Aggiungi anche scansione e utenti al bottom nav come overflow
     document.getElementById('op-header').textContent='Scansione (Admin)';
   }else{
@@ -743,10 +827,11 @@ function setupNav(){
     const tabs=[
       {p:'operatore',icon:'ti-scan',label:'Scansione'},
       {p:'ordini-op',icon:'ti-shopping-cart',label:'Ordini'},
+      {p:'messaggi',icon:'ti-message-circle',label:'Chat'},
     ];
-    bottomNav.innerHTML=tabs.map(t=>`<button class="bottom-tab" onclick="showPage('${t.p}')" id="btab-${t.p}"><i class="ti ${t.icon}"></i><span>${t.label}</span></button>`).join('');
+    bottomNav.innerHTML=tabs.map(t=>`<button class="bottom-tab" onclick="showPage('${t.p}')" id="btab-${t.p}" style="flex:1;"><i class="ti ${t.icon}"></i>${t.p==='messaggi'?'<span class="notif-badge" id="msg-notif-mobile"></span>':''}<span>${t.label}</span></button>`).join('');
     navTabs.style.display='flex';
-    navTabs.innerHTML=tabs.map(t=>`<button class="nav-tab" onclick="showPage('${t.p}')" id="ntab-${t.p}"><i class="ti ${t.icon}"></i> <span>${t.label}</span></button>`).join('');
+    navTabs.innerHTML=tabs.map(t=>`<button class="nav-tab" onclick="showPage('${t.p}')" id="ntab-${t.p}"><i class="ti ${t.icon}"></i> <span>${t.label}</span>${t.p==='messaggi'?'<span class="nav-notif" id="msg-notif-desktop"></span>':''}</button>`).join('');
     document.getElementById('op-header').textContent='Ciao, '+currentUser.name.split(' ')[0]+'!';
   }
 }
@@ -769,6 +854,7 @@ function showPage(p){
   if(p==='operatore')loadOpStorico();
   if(p==='ordini-op'){loadOpProducts();loadOpOrders();}
   if(p==='utenti')loadUsers();
+  if(p==='messaggi')loadMessaggi();
 }
 
 // ══ CLIENTI ══
@@ -982,17 +1068,18 @@ function renderReportGiornalieri(){
         <div id="rd${idx}" style="display:none;margin-top:12px;padding-top:12px;border-top:0.5px solid var(--border);">
           ${mancanti.length===0?
             `<div style="text-align:center;padding:.5rem;font-size:13px;color:var(--success);"><i class="ti ti-circle-check" style="font-size:24px;display:block;margin-bottom:4px;"></i>Tutte le zone completate!</div>`:
-            `<div style="font-size:11px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Zone mancanti</div>
-            ${mancanti.slice(0,5).map(z=>`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:0.5px solid var(--border);font-size:12px;">
+            `<div style="font-size:11px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Zone mancanti (${mancanti.length})</div>
+            ${mancanti.slice(0,4).map(z=>`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:0.5px solid var(--border);font-size:12px;">
               <div style="width:7px;height:7px;border-radius:50%;background:var(--danger);flex-shrink:0;"></div>
               <span style="flex:1;color:var(--text);">${z.name}</span>
               <span style="color:var(--muted);">${z.client}</span>
             </div>`).join('')}
-            ${mancanti.length>5?`<div style="font-size:11px;color:var(--muted);padding-top:4px;">+ ${mancanti.length-5} altre zone mancanti</div>`:''}`
+            ${mancanti.length>4?`<div style="font-size:11px;color:var(--muted);padding-top:4px;">+ ${mancanti.length-4} altre...</div>`:''}`
           }
-          <div style="display:flex;gap:8px;margin-top:10px;">
+          <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+            <button class="btn btn-sm" style="flex:1;" onclick="vediTuttaGiornata('${day}')"><i class="ti ti-list-details"></i> Vedi tutto</button>
             <button class="btn btn-success btn-sm" style="flex:1;" onclick="exportReportDayExcel('${day}',${idx})"><i class="ti ti-file-spreadsheet"></i> Excel</button>
-            <button class="btn btn-primary btn-sm" style="flex:1;" onclick="condividiReportDay('${day}',${idx})"><i class="ti ti-share"></i> Invia PDF</button>
+            <button class="btn btn-primary btn-sm" style="flex:1;" onclick="condividiReportDay('${day}',${idx})"><i class="ti ti-share"></i> PDF</button>
           </div>
         </div>
       </div>`;
@@ -1294,7 +1381,9 @@ async function doAzzera(){
   const{data:logs}=await sb.from('logs').select('photo_url').not('photo_url','is',null);
   if(logs&&logs.length){const paths=logs.map(l=>{const p=l.photo_url.split('/foto-pulizie/')[1];return p?decodeURIComponent(p):null;}).filter(Boolean);if(paths.length)await sb.storage.from('foto-pulizie').remove(paths);}
   await sb.from('logs').delete().neq('id','00000000-0000-0000-0000-000000000000');
-  loadStorico();showToast('Storico e foto azzerati');
+  await sb.from('orders').delete().neq('id','00000000-0000-0000-0000-000000000000');
+  await sb.from('messages').delete().neq('id','00000000-0000-0000-0000-000000000000');
+  loadStorico();showToast('Storico, ordini, foto e messaggi azzerati');
 }
 
 // ══ PRODOTTI ══
@@ -1638,6 +1727,319 @@ async function exportExcel(){
 }
 
 // ══ INIT ══
+
+// ══ MESSAGGISTICA ══
+let msgPollingInterval=null;
+let lastMsgCount=0;
+let popupMsgId=null;
+let currentChatWith=null; // userId or 'all'
+let currentChatName='';
+
+function updateMsgBadge(count){
+  ['msg-notif-mobile','msg-notif-desktop'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){el.textContent=count>0?count:'';el.style.display=count>0?'flex':'none';}
+  });
+}
+
+let pendingPopups=[];
+let shownMsgIds=new Set();
+async function checkNewMessages(){
+  if(!currentUser)return;
+  let q=sb.from('messages').select('id,from_name,testo,from_user_id,to_user_id').eq('read',false).neq('from_user_id',currentUser.id);
+  if(currentUser.role==='operatore'){
+    q=q.eq('to_user_id',currentUser.id);
+  }
+  const{data}=await q;
+  const unread=(data||[]).length;
+  updateMsgBadge(unread);
+  if(unread>0&&unread>lastMsgCount&&currentUser.role==='operatore'&&data&&data.length>0){
+    playSound('notify');
+    // Aggiungi tutti i nuovi messaggi alla coda popup
+    const newMsgs=data.slice(0,unread-lastMsgCount<0?1:unread);
+    // Deduplica per ID — non mostrare mai lo stesso messaggio due volte
+    newMsgs.forEach(m=>{
+      if(!shownMsgIds.has(m.id)&&!pendingPopups.find(p=>p.id===m.id)){
+        pendingPopups.push(m);
+        shownMsgIds.add(m.id);
+      }
+    });
+    // Mostra il primo se il popup è chiuso
+    if(document.getElementById('msg-popup').style.display==='none'){
+      showNextPopup();
+    }
+  }
+  lastMsgCount=unread;
+}
+
+function showNextPopup(){
+  if(!pendingPopups.length)return;
+  const msg=pendingPopups[0];
+  showMsgPopup(msg);
+}
+
+function showMsgPopup(msg){
+  popupMsgId=msg.id;
+  const counter=pendingPopups.length>1?` (${pendingPopups.indexOf(msg)+1}/${pendingPopups.length})`:'';
+  document.getElementById('popup-from').textContent='Messaggio da '+msg.from_name+counter;
+  document.getElementById('popup-text').textContent=msg.testo;
+  document.getElementById('popup-reply-wrap').style.display='none';
+  document.getElementById('popup-reply-text').value='';
+  document.getElementById('msg-popup').style.display='flex';
+  shownMsgIds.add(msg.id);
+  sb.from('messages').update({read:true}).eq('id',msg.id);
+}
+
+function closePopup(){
+  document.getElementById('msg-popup').style.display='none';
+  popupMsgId=null;
+  // Rimuovi il messaggio mostrato dalla coda
+  if(pendingPopups.length>0)pendingPopups.shift();
+  // Se ci sono altri messaggi in coda mostrali
+  if(pendingPopups.length>0){
+    setTimeout(()=>showNextPopup(),300);
+  }else{
+    checkNewMessages();
+  }
+}
+
+async function getAdminId(){
+  // Returns the first admin that has exchanged messages with this user, or any admin
+  const{data:myMsgs}=await sb.from('messages').select('from_user_id,to_user_id').or(`from_user_id.eq.${currentUser.id},to_user_id.eq.${currentUser.id}`).limit(10);
+  if(myMsgs&&myMsgs.length){
+    const adminIds=myMsgs.map(m=>m.from_user_id===currentUser.id?m.to_user_id:m.from_user_id).filter(Boolean);
+    if(adminIds.length)return adminIds[0];
+  }
+  const{data}=await sb.from('users').select('id').eq('role','admin').limit(1).single();
+  return data?data.id:null;
+}
+async function replyQuick(text){
+  if(text==='Altro...'){document.getElementById('popup-reply-wrap').style.display='block';return;}
+  const adminId=await getAdminId();
+  await sendMsgDirect(text,adminId);
+  closePopup();showToast('Risposta inviata!');
+}
+
+async function sendPopupReply(){
+  const text=document.getElementById('popup-reply-text').value.trim();
+  if(!text)return;
+  const adminId=await getAdminId();
+  await sendMsgDirect(text,adminId);
+  closePopup();showToast('Risposta inviata!');
+}
+
+async function sendMsgDirect(testo,toUserId){
+  await sb.from('messages').insert({from_user_id:currentUser.id,from_name:currentUser.name,to_user_id:toUserId||null,testo,read:false});
+}
+
+async function loadMessaggi(){
+  const isAdmin=currentUser.role==='admin';
+  document.getElementById('msg-new-btn-wrap').style.display=isAdmin?'block':'none';
+  backToList();
+  await loadConvList();
+  if(msgPollingInterval)clearInterval(msgPollingInterval);
+  msgPollingInterval=setInterval(()=>{
+    if(document.getElementById('page-messaggi').classList.contains('active')){
+      if(document.getElementById('msg-chat-view').style.display!=='none')loadChat();
+      else loadConvList();
+    }
+  },15000);
+}
+
+function startDeleteChat(){
+  pinBuffer='';updatePinDots();
+  document.getElementById('pin-err').style.display='none';
+  document.getElementById('pin-modal-title').innerHTML='<i class="ti ti-lock"></i> PIN richiesto';
+  document.getElementById('pin-modal-sub').textContent='Inserisci il PIN per eliminare questa conversazione';
+  pinModalCallback=doDeleteChat;
+  openModal('pin-modal');
+}
+async function doDeleteChat(){
+  if(!currentChatWith)return;
+  // Delete messages between these two users
+  await sb.from('messages').delete().or(
+    `and(from_user_id.eq.${currentUser.id},to_user_id.eq.${currentChatWith}),and(from_user_id.eq.${currentChatWith},to_user_id.eq.${currentUser.id})`
+  );
+  showToast('Conversazione eliminata');
+  backToList();
+}
+async function loadConvList(){
+  const isAdmin=currentUser.role==='admin';
+  const el=document.getElementById('msg-conv-list');
+  // Get all messages
+  const{data:msgs}=await sb.from('messages').select('*').order('created_at',{ascending:false}).limit(200);
+  if(!msgs||!msgs.length){
+    el.innerHTML='<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;"><i class="ti ti-message-off" style="font-size:32px;display:block;margin-bottom:8px;"></i>Nessun messaggio ancora.</div>';
+    return;
+  }
+  if(isAdmin){
+    // Group by ALL users (operatori + altri admin) except current user
+    const{data:users}=await sb.from('users').select('id,name,role').neq('id',currentUser.id).order('name');
+    const convs=[];
+    (users||[]).forEach(u=>{
+      const uMsgs=msgs.filter(m=>m.from_user_id===u.id||(m.to_user_id===u.id&&m.from_user_id===currentUser.id));
+      if(uMsgs.length){
+        const last=uMsgs[0];
+        const unread=uMsgs.filter(m=>!m.read&&m.from_user_id!==currentUser.id).length;
+        convs.push({userId:u.id,name:u.name,role:u.role,last,unread});
+      }
+    });
+    // Solo chat dirette — broadcast rimosso
+    convs.sort((a,b)=>b.unread-a.unread||new Date(b.last.created_at)-new Date(a.last.created_at));
+    el.innerHTML=convs.length?convs.map(c=>convCard(c)).join(''):'<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;">Nessuna conversazione.</div>';
+  }else{
+    // Operatore: show single conversation with admins
+    const myMsgs=msgs.filter(m=>m.from_user_id===currentUser.id||m.to_user_id===currentUser.id);
+    const unread=myMsgs.filter(m=>!m.read&&m.from_user_id!==currentUser.id).length;
+    const last=myMsgs[0];
+    if(last){
+      el.innerHTML=convCard({userId:'admin',name:'Admin',last,unread});
+    }else{
+      el.innerHTML='<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;">Nessun messaggio ancora.</div>';
+    }
+  }
+}
+
+function convCard(c){
+  const isOut=c.last.from_user_id===currentUser.id;
+  const preview=(isOut?'Tu: ':'')+c.last.testo.slice(0,50)+(c.last.testo.length>50?'...':'');
+  const time=fmt(c.last.created_at);
+  const roleIcon=c.role==='admin'?'🛡 ':'';
+  return `<div onclick="openChat('${c.userId}','${c.name.replace(/'/g,"\'")}','${c.last.from_name||''}')" style="display:flex;align-items:center;gap:12px;padding:14px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:8px;cursor:pointer;">
+    <div style="width:44px;height:44px;border-radius:50%;background:var(--accent-light);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0;">${c.name.slice(0,2).toUpperCase()}</div>
+    <div style="flex:1;min-width:0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px;">
+        <div style="font-size:14px;font-weight:${c.unread?'700':'500'};color:var(--text);">${roleIcon}${c.name}</div>
+        <div style="font-size:11px;color:var(--muted);">${time}</div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:${c.unread?'600':'400'};">${preview}</div>
+    </div>
+    ${c.unread?`<div style="background:var(--accent);color:#fff;font-size:11px;font-weight:700;min-width:20px;height:20px;border-radius:20px;display:flex;align-items:center;justify-content:center;padding:0 4px;flex-shrink:0;">${c.unread}</div>`:''}
+  </div>`;
+}
+
+async function openChat(userId,name,fromName){
+  currentChatWith=userId;
+  currentChatName=name;
+  document.getElementById('chat-header-name').textContent=name;
+  document.getElementById('chat-header-sub').textContent=currentUser.role==='admin'?'Utente':'Admin';
+  document.getElementById('msg-list-view').style.display='none';
+  const cv=document.getElementById('msg-chat-view');cv.style.display='flex';cv.style.flexDirection='column';
+  // Mostra bottone elimina solo per admin
+  const delBtn=document.getElementById('btn-delete-chat');
+  if(delBtn)delBtn.style.display=currentUser.role==='admin'?'block':'none';
+  await loadChat();
+}
+
+function backToList(){
+  currentChatWith=null;
+  document.getElementById('msg-list-view').style.display='block';
+  document.getElementById('msg-chat-view').style.display='none';
+  loadConvList();
+}
+
+async function openNewChat(){
+  const{data:users}=await sb.from('users').select('id,name,role').neq('id',currentUser.id).order('name');
+  const opts=(users||[]).map(u=>`<option value="${u.id}">${u.role==='admin'?'🛡 ':'👤 '}${u.name}</option>`).join('');
+  const modal=document.createElement('div');modal.className='modal-overlay';modal.style.display='flex';
+  modal.innerHTML=`<div class="modal"><div class="modal-title">Nuova chat</div><select class="form-input" id="new-chat-sel" style="margin-bottom:12px;">${opts}</select><div class="modal-footer"><button class="btn" onclick="this.closest('.modal-overlay').remove()">Annulla</button><button class="btn btn-primary" onclick="startNewChat()">Apri chat</button></div></div>`;
+  document.body.appendChild(modal);
+}
+
+async function startNewChat(){
+  const sel=document.getElementById('new-chat-sel');
+  const val=sel.value;
+  const name=sel.options[sel.selectedIndex].text;
+  document.querySelector('.modal-overlay:last-child').remove();
+  const{data:users}=await sb.from('users').select('id,name').eq('role','operatore');
+  const user=val==='all'?null:(users||[]).find(u=>u.id===val);
+  openChat(val,name.replace('📢 ',''),user?.name||'');
+}
+
+async function loadChat(){
+  if(!currentChatWith)return;
+  const chatArea=document.getElementById('msg-chat-area');
+  let msgs=[];
+  if(currentUser.role==='admin'){
+    if(currentChatWith==='all'){
+      const{data}=await sb.from('messages').select('*').is('to_user_id',null).order('created_at',{ascending:true}).limit(100);
+      msgs=data||[];
+    }else{
+      // Prendo TUTTI i messaggi di questa coppia: admin→op e op→qualsiasi destinatario
+      const{data}=await sb.from('messages').select('*').or(
+        `and(from_user_id.eq.${currentUser.id},to_user_id.eq.${currentChatWith}),and(from_user_id.eq.${currentChatWith},to_user_id.eq.${currentUser.id})`
+      ).order('created_at',{ascending:true}).limit(100);
+      msgs=data||[];
+    }
+  }else{
+    // Operatore: solo messaggi diretti (no broadcast)
+    const{data}=await sb.from('messages').select('*').or(
+      `from_user_id.eq.${currentUser.id},to_user_id.eq.${currentUser.id}`
+    ).order('created_at',{ascending:true}).limit(100);
+    msgs=data||[];
+  }
+  // Mark as read
+  const unreadIds=msgs.filter(m=>m.from_user_id!==currentUser.id&&!m.read).map(m=>m.id);
+  if(unreadIds.length)await Promise.all(unreadIds.map(id=>sb.from('messages').update({read:true}).eq('id',id)));
+  if(!msgs.length){
+    chatArea.innerHTML='<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px;">Nessun messaggio ancora.<br>Scrivi il primo!</div>';
+    checkNewMessages();return;
+  }
+  chatArea.innerHTML=msgs.map(m=>{
+    const isOut=m.from_user_id===currentUser.id;
+    const time=fmt(m.created_at)+' '+fmtDate(m.created_at);
+    return `<div class="msg-row ${isOut?'out':'in'}">
+      <div style="max-width:78%;">
+        ${!isOut?`<div style="font-size:10px;color:var(--muted);margin-bottom:3px;font-weight:600;padding-left:4px;">${m.from_name}</div>`:''}
+        <div class="msg-bubble ${isOut?'msg-out':'msg-in'}">${m.testo}</div>
+        <div class="msg-meta ${isOut?'':'in'}" style="font-size:10px;color:var(--muted);margin-top:2px;padding:0 4px;">${time}</div>
+      </div>
+    </div>`;
+  }).join('');
+  chatArea.scrollTop=chatArea.scrollHeight;
+  checkNewMessages();
+}
+
+async function sendMessage(){
+  const text=document.getElementById('msg-input').value.trim();
+  if(!text){return;}
+  let toUserId=null;
+  if(currentUser.role==='admin'){
+    // Admin: send to selected user or null for all
+    if(currentChatWith!=='all'&&currentChatWith!=='admin')toUserId=currentChatWith;
+  }else{
+    // Operatore: always send to specific admin (not null = not broadcast)
+    toUserId=await getAdminId();
+  }
+  await sendMsgDirect(text,toUserId);
+  document.getElementById('msg-input').value='';
+  loadChat();
+}
+
+async function vediTuttaGiornata(day){
+  const clientFilter=document.getElementById('report-client-filter')?.value||'all';
+  const{data:zones}=await sb.from('zones').select('*').order('client').order('name');
+  const allZones=(zones||[]);
+  const filteredZones=clientFilter==='all'?allZones:allZones.filter(z=>z.client===clientFilter);
+  const dayLogs=allLogsCache.filter(l=>new Date(l.created_at).toLocaleDateString('it-IT')===day);
+  document.getElementById('giornata-modal-title').textContent='Attività del '+day+(clientFilter!=='all'?' — '+clientFilter:'');
+  const doneMap={};
+  dayLogs.forEach(l=>{if(l.ok&&!doneMap[l.zone_id])doneMap[l.zone_id]=l;});
+  const body=document.getElementById('giornata-modal-body');
+  body.innerHTML=filteredZones.map(z=>{
+    const log=doneMap[z.id];
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
+      <div style="width:9px;height:9px;border-radius:50%;background:${log?'var(--success)':'var(--danger)'};flex-shrink:0;"></div>
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:600;">${z.name}</div>
+        <div style="font-size:11px;color:var(--muted);">${z.client}${log?' · '+log.users?.name+' · '+fmt(log.created_at):''}</div>
+      </div>
+      ${log?`<span style="font-size:11px;background:var(--success-light);color:var(--success);padding:2px 8px;border-radius:20px;font-weight:600;">✓</span>`:`<span style="font-size:11px;background:var(--danger-light);color:var(--danger);padding:2px 8px;border-radius:20px;font-weight:600;">✗</span>`}
+    </div>`;
+  }).join('');
+  document.getElementById('giornata-modal').style.display='flex';
+}
+
 loadSavedCreds();
 tryAutoLogin();
 </script>
