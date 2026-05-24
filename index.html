@@ -278,10 +278,14 @@ textarea.form-input{resize:none;}
       <div id="storico-list"><div style="text-align:center;padding:1rem;color:var(--muted);">Caricamento...</div></div>
     </div>
     <div id="st-tab-report" style="display:none;">
-      <div style="margin-bottom:12px;">
-        <select class="form-input" id="report-client-filter" style="font-size:13px;" onchange="renderReportGiornalieri()">
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+        <select class="form-input" id="report-client-filter" style="flex:1;font-size:13px;" onchange="renderReportGiornalieri()">
           <option value="all">— Tutti i clienti —</option>
         </select>
+        <select class="form-input" id="report-month-filter" style="flex:1;font-size:13px;" onchange="renderReportGiornalieri()">
+          <option value="all">— Tutti i mesi —</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="condividiReportMensile()"><i class="ti ti-share"></i> Invia PDF mensile</button>
       </div>
       <div id="report-list"><div style="text-align:center;padding:1rem;color:var(--muted);">Caricamento...</div></div>
     </div>
@@ -911,14 +915,37 @@ async function loadReportGiornalieri(){
   }
   const{data}=await sb.from('logs').select('*,users(name)').order('created_at',{ascending:false}).limit(1000);
   allLogsCache=data||[];
+  // Populate month filter
+  const msel=document.getElementById('report-month-filter');
+  if(msel){
+    const months=new Set();
+    (data||[]).forEach(l=>{
+      const d=new Date(l.created_at);
+      const key=d.getFullYear()+'-'+(d.getMonth()+1).toString().padStart(2,'0');
+      months.add(key);
+    });
+    const cur=msel.value;
+    msel.innerHTML='<option value="all">— Tutti i mesi —</option>'+[...months].sort().reverse().map(m=>{
+      const[y,mo]=m.split('-');
+      const names=['','Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+      return `<option value="${m}">${names[parseInt(mo)]} ${y}</option>`;
+    }).join('');
+    if(cur)msel.value=cur;
+  }
   renderReportGiornalieri();
 }
 
 function renderReportGiornalieri(){
   const clientFilter=document.getElementById('report-client-filter')?.value||'all';
-  // Group logs by date
+  const monthFilter=document.getElementById('report-month-filter')?.value||'all';
+  // Group logs by date — filter by month if selected
   const byDay={};
   allLogsCache.forEach(l=>{
+    if(monthFilter!=='all'){
+      const d=new Date(l.created_at);
+      const key=d.getFullYear()+'-'+(d.getMonth()+1).toString().padStart(2,'0');
+      if(key!==monthFilter)return;
+    }
     const day=new Date(l.created_at).toLocaleDateString('it-IT');
     if(!byDay[day])byDay[day]=[];
     byDay[day].push(l);
@@ -1093,6 +1120,119 @@ async function condividiReportDay(day,idx){
   showToast('PDF pronto!');
 }
 
+async function condividiReportMensile(){
+  const clientFilter=document.getElementById('report-client-filter')?.value||'all';
+  const monthFilter=document.getElementById('report-month-filter')?.value||'all';
+  // Filter logs by month
+  const logs=allLogsCache.filter(l=>{
+    if(monthFilter==='all')return true;
+    const d=new Date(l.created_at);
+    const key=d.getFullYear()+'-'+(d.getMonth()+1).toString().padStart(2,'0');
+    return key===monthFilter;
+  });
+  if(!logs.length){showToast('Nessun dato per questo mese',false);return;}
+  // Get zones
+  const{data:zones}=await sb.from('zones').select('*').order('client').order('name');
+  const allZones=zones||[];
+  const filteredZones=clientFilter==='all'?allZones:allZones.filter(z=>z.client===clientFilter);
+  // Count passaggi per zone (only ok=true)
+  const passaggi={};
+  const operatori={};
+  logs.filter(l=>l.ok).forEach(l=>{
+    if(!passaggi[l.zone_id])passaggi[l.zone_id]=0;
+    passaggi[l.zone_id]++;
+    if(!operatori[l.zone_id])operatori[l.zone_id]=new Set();
+    if(l.users?.name)operatori[l.zone_id].add(l.users.name.split(' ')[0]+' '+l.users.name.split(' ').slice(-1)[0]);
+  });
+  // Build month label
+  const monthLabel=monthFilter==='all'?'Tutto lo storico':(()=>{
+    const[y,mo]=monthFilter.split('-');
+    const names=['','Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+    return names[parseInt(mo)]+' '+y;
+  })();
+  const clientLabel=clientFilter==='all'?'Tutti i clienti':clientFilter;
+  // Generate PDF
+  const{jsPDF}=window.jspdf;
+  if(!jsPDF){showToast('Libreria PDF non disponibile',false);return;}
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const today=new Date().toLocaleDateString('it-IT');
+  // Header
+  doc.setFillColor(26,92,58);doc.rect(0,0,210,22,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(15);doc.setFont('helvetica','bold');doc.text('CleanTrack',14,11);
+  doc.setFontSize(10);doc.setFont('helvetica','normal');doc.text('Report mensile pulizie — '+clientLabel,14,18);
+  doc.setFontSize(12);doc.setFont('helvetica','bold');doc.text(monthLabel,196,11,{align:'right'});
+  doc.setFontSize(9);doc.setFont('helvetica','normal');doc.text('Generato il '+today,196,18,{align:'right'});
+  // Stat boxes
+  const totPass=filteredZones.reduce((s,z)=>(s+(passaggi[z.id]||0)),0);
+  const bw=55,bh=16,by=26;
+  doc.setFillColor(232,242,236);doc.roundedRect(14,by,bw,bh,2,2,'F');
+  doc.setTextColor(26,92,58);doc.setFontSize(18);doc.setFont('helvetica','bold');doc.text(String(filteredZones.length),41,by+8,{align:'center'});
+  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.text('Zone monitorate',41,by+13,{align:'center'});
+  doc.setFillColor(232,242,236);doc.roundedRect(73,by,bw,bh,2,2,'F');
+  doc.setTextColor(26,92,58);doc.setFontSize(18);doc.setFont('helvetica','bold');doc.text(String(totPass),100,by+8,{align:'center'});
+  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.text('Passaggi totali',100,by+13,{align:'center'});
+  doc.setFillColor(232,242,236);doc.roundedRect(132,by,bw,bh,2,2,'F');
+  const nClienti=clientFilter==='all'?[...new Set(filteredZones.map(z=>z.client))].length:1;
+  doc.setTextColor(26,92,58);doc.setFontSize(18);doc.setFont('helvetica','bold');doc.text(String(nClienti),159,by+8,{align:'center'});
+  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.text('Client'+(nClienti>1?'i':'e'),159,by+13,{align:'center'});
+  // Tables per client
+  let yPos=50;
+  const clientGroups={};
+  filteredZones.forEach(z=>{if(!clientGroups[z.client])clientGroups[z.client]=[];clientGroups[z.client].push(z);});
+  Object.entries(clientGroups).forEach(([cl,czones])=>{
+    if(yPos>250){doc.addPage();yPos=20;}
+    doc.setTextColor(26,92,58);doc.setFontSize(11);doc.setFont('helvetica','bold');doc.text(cl,14,yPos);yPos+=4;
+    const rows=czones.map(z=>[z.name,String(passaggi[z.id]||0),operatori[z.id]?[...operatori[z.id]].join(', '):'—']);
+    const totCl=czones.reduce((s,z)=>(s+(passaggi[z.id]||0)),0);
+    rows.push(['TOTALE',String(totCl),'']);
+    doc.autoTable({
+      startY:yPos,
+      head:[['Zona','Passaggi','Operatori']],
+      body:rows,
+      styles:{fontSize:9,cellPadding:2.5},
+      headStyles:{fillColor:[26,92,58],textColor:255,fontStyle:'bold'},
+      alternateRowStyles:{fillColor:[232,242,236]},
+      columnStyles:{0:{cellWidth:95},1:{cellWidth:22},2:{cellWidth:67}},
+      margin:{left:14,right:14},
+      didParseCell:(data)=>{
+        if(data.row.index===rows.length-1){
+          data.cell.styles.fillColor=[208,232,216];
+          data.cell.styles.textColor=[26,92,58];
+          data.cell.styles.fontStyle='bold';
+        }
+      }
+    });
+    yPos=doc.lastAutoTable.finalY+6;
+  });
+  // Grand total
+  if(yPos>265){doc.addPage();yPos=20;}
+  doc.autoTable({
+    startY:yPos,
+    body:[['TOTALE GENERALE — tutti i clienti',String(totPass),'']],
+    styles:{fontSize:10,cellPadding:4},
+    bodyStyles:{fillColor:[26,92,58],textColor:255,fontStyle:'bold'},
+    columnStyles:{0:{cellWidth:95},1:{cellWidth:22},2:{cellWidth:67}},
+    margin:{left:14,right:14},
+  });
+  // Footer
+  const pages=doc.internal.getNumberOfPages();
+  for(let i=1;i<=pages;i++){
+    doc.setPage(i);
+    doc.setFillColor(26,92,58);doc.rect(0,285,210,12,'F');
+    doc.setTextColor(255,255,255);doc.setFontSize(8);doc.setFont('helvetica','normal');
+    doc.text('cleantrack-amber.vercel.app',14,292);
+    doc.text('pag. '+i+'/'+pages,196,292,{align:'right'});
+  }
+  const blob=doc.output('blob');
+  const fileName='CleanTrack_Mensile_'+monthLabel.replace(/ /g,'_')+'.pdf';
+  const file=new File([blob],fileName,{type:'application/pdf'});
+  if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({title:'Report mensile '+monthLabel,files:[file]});return;}catch(e){}}
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=fileName;a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  showToast('PDF mensile pronto!');
+}
 async function scaricaTuttiReport(){
   const clientFilter=document.getElementById('report-client-filter')?.value||'all';
   const{data:zones}=await sb.from('zones').select('*').order('client').order('name');
