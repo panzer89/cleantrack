@@ -845,10 +845,11 @@ function setupNav(){
     const tabs=[
       {p:'dashboard',icon:'ti-layout-dashboard',label:'Home'},
       {p:'storico',icon:'ti-history',label:'Storico'},
+      {p:'messaggi',icon:'ti-message-circle',label:'Chat'},
     ];
-    bottomNav.innerHTML=tabs.map(t=>`<button class="bottom-tab" onclick="showPage('${t.p}')" id="btab-${t.p}" style="flex:1;"><i class="ti ${t.icon}"></i><span>${t.label}</span></button>`).join('');
+    bottomNav.innerHTML=tabs.map(t=>`<button class="bottom-tab" onclick="showPage('${t.p}')" id="btab-${t.p}" style="flex:1;"><i class="ti ${t.icon}"></i>${t.p==='messaggi'?'<span class="notif-badge" id="msg-notif-mobile"></span>':''}<span>${t.label}</span></button>`).join('');
     navTabs.style.display='flex';
-    navTabs.innerHTML=tabs.map(t=>`<button class="nav-tab" onclick="showPage('${t.p}')" id="ntab-${t.p}"><i class="ti ${t.icon}"></i> <span>${t.label}</span></button>`).join('');
+    navTabs.innerHTML=tabs.map(t=>`<button class="nav-tab" onclick="showPage('${t.p}')" id="ntab-${t.p}"><i class="ti ${t.icon}"></i> <span>${t.label}</span>${t.p==='messaggi'?'<span class="nav-notif" id="msg-notif-desktop"></span>':''}</button>`).join('');
   }else{
     badge.className='badge badge-accent';badge.textContent='Operatore';
     const tabs=[
@@ -933,11 +934,16 @@ async function loadDashboard(){
     const df=document.getElementById('dash-filter');
     const vl=document.getElementById('vis-client-label');
     const az=document.getElementById('btn-azzera');
-    if(df)df.style.display='none';
     if(az)az.style.display='none';
-    if(vl){
-      vl.style.display='inline';
-      vl.textContent=currentUser.vis_client&&currentUser.vis_client!=='all'?currentUser.vis_client:'Tutti i clienti';
+    const hasAllClients=!currentUser.vis_client||currentUser.vis_client==='all';
+    if(hasAllClients){
+      // Visitatore con tutti i clienti — mostra filtro
+      if(df)df.style.display='';
+      if(vl)vl.style.display='none';
+    }else{
+      // Visitatore con cliente specifico — blocca filtro
+      if(df)df.style.display='none';
+      if(vl){vl.style.display='inline';vl.textContent=currentUser.vis_client;}
     }
   }
   const today=new Date().toISOString().split('T')[0];
@@ -947,9 +953,9 @@ async function loadDashboard(){
     sb.from('orders').select('id').eq('evaso',false)
   ]);
   const done=new Set((logs||[]).filter(l=>l.ok).map(l=>l.zone_id));
-  // Visitatore: forza filtro sul suo cliente
-  const visClient=currentUser.role==='visitatore'?currentUser.vis_client:null;
-  const f=visClient&&visClient!=='all'?(zones||[]).filter(z=>z.client===visClient):dashFilter==='all'?(zones||[]):(zones||[]).filter(z=>z.client===dashFilter);
+  // Visitatore: forza filtro sul suo cliente (se specifico), altrimenti usa dashFilter
+  const visClient=currentUser.role==='visitatore'&&currentUser.vis_client&&currentUser.vis_client!=='all'?currentUser.vis_client:null;
+  const f=visClient?(zones||[]).filter(z=>z.client===visClient):dashFilter==='all'?(zones||[]):(zones||[]).filter(z=>z.client===dashFilter);
   document.getElementById('s-total').textContent=f.length;
   document.getElementById('s-done').textContent=f.filter(z=>done.has(z.id)).length;
   document.getElementById('s-miss').textContent=f.filter(z=>!done.has(z.id)).length;
@@ -1043,10 +1049,13 @@ async function loadReportGiornalieri(){
     sel.innerHTML='<option value="all">— Tutti i clienti —</option>'+clientsList.map(c=>`<option value="${c.name}">${c.name}</option>`).join('');
     sel.value=cur;
   }
-  // Visitatore: forza cliente e blocca filtro
+  // Visitatore: se cliente specifico blocca filtro, se 'all' lascia libero
   if(currentUser.role==='visitatore'){
     const visC=currentUser.vis_client||'all';
-    if(sel){sel.value=visC;sel.disabled=true;}
+    if(sel){
+      if(visC!=='all'){sel.value=visC;sel.disabled=true;}
+      else{sel.disabled=false;}
+    }
   }
   const{data}=await sb.from('logs').select('*,users(name)').order('created_at',{ascending:false}).limit(1000);
   allLogsCache=data||[];
@@ -1808,7 +1817,7 @@ let shownMsgIds=new Set();
 async function checkNewMessages(){
   if(!currentUser)return;
   let q=sb.from('messages').select('id,from_name,testo,from_user_id,to_user_id').eq('read',false).neq('from_user_id',currentUser.id);
-  if(currentUser.role==='operatore'){
+  if(currentUser.role==='operatore'||currentUser.role==='visitatore'){
     q=q.eq('to_user_id',currentUser.id);
   }
   const{data}=await q;
