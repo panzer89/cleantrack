@@ -246,6 +246,7 @@ textarea.form-input{resize:none;}
     <div class="page-header">
       <span class="page-title">Riepilogo oggi</span>
       <select class="form-input" style="width:auto;font-size:13px;" onchange="filterDash(this.value)" id="dash-filter"></select>
+      <span id="vis-client-label" style="display:none;font-size:13px;font-weight:600;color:var(--accent);"></span>
     </div>
     <div class="stat-grid">
       <div class="stat"><div class="stat-label">Totale</div><div class="stat-value" id="s-total">—</div></div>
@@ -282,7 +283,7 @@ textarea.form-input{resize:none;}
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn btn-success btn-sm" id="btn-excel-storico" onclick="exportExcel()"><i class="ti ti-file-spreadsheet"></i> Excel</button>
         <button class="btn btn-primary btn-sm" id="btn-scarica-tutti" style="display:none;" onclick="scaricaTuttiReport()"><i class="ti ti-download"></i> Scarica tutti</button>
-        <button class="btn btn-danger btn-sm" onclick="startAzzera()"><i class="ti ti-trash"></i> Azzera tutto</button>
+        <button class="btn btn-danger btn-sm" onclick="startAzzera()" id="btn-azzera"><i class="ti ti-trash"></i> Azzera tutto</button>
       </div>
     </div>
     <div class="tab-pills">
@@ -562,8 +563,19 @@ textarea.form-input{resize:none;}
     <div class="form-row"><label class="form-label">Password</label>
       <div class="pass-wrap"><input class="form-input" type="password" id="um-pass" placeholder="••••••"><button class="pass-eye" onclick="togglePass('um-pass',this)" tabindex="-1"><i class="ti ti-eye"></i></button></div></div>
     <div class="form-row"><label class="form-label">Ruolo</label>
-      <div class="role-toggle"><div class="role-btn" id="rb-admin" onclick="setRole('admin')"><i class="ti ti-shield"></i> Admin</div><div class="role-btn active" id="rb-op" onclick="setRole('operatore')"><i class="ti ti-user"></i> Operatore</div></div>
-      <div style="font-size:12px;color:var(--muted);margin-top:6px;" id="role-desc">Solo scansione QR, ordini e storico</div></div>
+      <div class="role-toggle">
+        <div class="role-btn" id="rb-admin" onclick="setRole('admin')"><i class="ti ti-shield"></i> Admin</div>
+        <div class="role-btn active" id="rb-op" onclick="setRole('operatore')"><i class="ti ti-user"></i> Operatore</div>
+        <div class="role-btn" id="rb-vis" onclick="setRole('visitatore')"><i class="ti ti-eye"></i> Visitatore</div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-top:6px;" id="role-desc">Solo scansione QR, ordini e storico</div>
+      <!-- Cliente assegnato (solo visitatore) -->
+      <div id="vis-client-wrap" style="display:none;margin-top:10px;">
+        <label class="form-label">Cliente visibile</label>
+        <select class="form-input" id="um-vis-client">
+          <option value="all">— Tutti i clienti —</option>
+        </select>
+      </div></div>
     <div class="form-row"><label class="form-label">Piano assegnato</label>
       <select class="form-input" id="um-floor"><option>Piano terra</option><option>1° piano</option><option>Tutti i piani</option></select></div>
     <div class="modal-footer">
@@ -759,7 +771,7 @@ async function tryAutoLogin(){
   document.getElementById('login-screen').style.display='none';
   document.getElementById('main-app').style.display='block';
   setupNav();
-  showPage(currentUser.role==='admin'?'dashboard':'operatore');
+  showPage(currentUser.role==='admin'?'dashboard':currentUser.role==='visitatore'?'dashboard':'operatore');
   if(currentUser.role==='admin')checkNewOrders();
   lastMsgCount=-1;
   setInterval(checkNewMessages,30000);
@@ -777,7 +789,7 @@ async function doLogin(){
   document.getElementById('login-screen').style.display='none';
   document.getElementById('main-app').style.display='block';
   setupNav();
-  showPage(currentUser.role==='admin'?'dashboard':'operatore');
+  showPage(currentUser.role==='admin'?'dashboard':currentUser.role==='visitatore'?'dashboard':'operatore');
   if(currentUser.role==='admin')checkNewOrders();
   lastMsgCount=-1;
   setInterval(checkNewMessages,30000);
@@ -828,6 +840,15 @@ function setupNav(){
     navTabs.innerHTML=tabs.map(t=>`<button class="nav-tab" onclick="showPage('${t.p}')" id="ntab-${t.p}"><i class="ti ${t.icon}"></i> <span>${t.label}</span>${t.p==='ordini-admin'?'<span class="nav-notif" id="notif-desktop"></span>':''}${t.p==='messaggi'?'<span class="nav-notif" id="msg-notif-desktop"></span>':''}</button>`).join('');
     // Aggiungi anche scansione e utenti al bottom nav come overflow
     document.getElementById('op-header').textContent='Scansione (Admin)';
+  }else if(currentUser.role==='visitatore'){
+    badge.className='badge badge-amber';badge.textContent='Visitatore';
+    const tabs=[
+      {p:'dashboard',icon:'ti-layout-dashboard',label:'Home'},
+      {p:'storico',icon:'ti-history',label:'Storico'},
+    ];
+    bottomNav.innerHTML=tabs.map(t=>`<button class="bottom-tab" onclick="showPage('${t.p}')" id="btab-${t.p}" style="flex:1;"><i class="ti ${t.icon}"></i><span>${t.label}</span></button>`).join('');
+    navTabs.style.display='flex';
+    navTabs.innerHTML=tabs.map(t=>`<button class="nav-tab" onclick="showPage('${t.p}')" id="ntab-${t.p}"><i class="ti ${t.icon}"></i> <span>${t.label}</span></button>`).join('');
   }else{
     badge.className='badge badge-accent';badge.textContent='Operatore';
     const tabs=[
@@ -907,6 +928,18 @@ async function deleteClient(id,name){
 // ══ DASHBOARD ══
 async function loadDashboard(){
   if(!clientsList.length)await loadClients();
+  // Visitatore: setup UI
+  if(currentUser.role==='visitatore'){
+    const df=document.getElementById('dash-filter');
+    const vl=document.getElementById('vis-client-label');
+    const az=document.getElementById('btn-azzera');
+    if(df)df.style.display='none';
+    if(az)az.style.display='none';
+    if(vl){
+      vl.style.display='inline';
+      vl.textContent=currentUser.vis_client&&currentUser.vis_client!=='all'?currentUser.vis_client:'Tutti i clienti';
+    }
+  }
   const today=new Date().toISOString().split('T')[0];
   const[{data:zones},{data:logs},{data:orders}]=await Promise.all([
     sb.from('zones').select('*').order('client').order('name'),
@@ -914,7 +947,9 @@ async function loadDashboard(){
     sb.from('orders').select('id').eq('evaso',false)
   ]);
   const done=new Set((logs||[]).filter(l=>l.ok).map(l=>l.zone_id));
-  const f=dashFilter==='all'?(zones||[]):(zones||[]).filter(z=>z.client===dashFilter);
+  // Visitatore: forza filtro sul suo cliente
+  const visClient=currentUser.role==='visitatore'?currentUser.vis_client:null;
+  const f=visClient&&visClient!=='all'?(zones||[]).filter(z=>z.client===visClient):dashFilter==='all'?(zones||[]):(zones||[]).filter(z=>z.client===dashFilter);
   document.getElementById('s-total').textContent=f.length;
   document.getElementById('s-done').textContent=f.filter(z=>done.has(z.id)).length;
   document.getElementById('s-miss').textContent=f.filter(z=>!done.has(z.id)).length;
@@ -991,8 +1026,11 @@ function switchStoricoTab(tab){
   document.getElementById('st-tab-report').style.display = tab==='report'?'block':'none';
   document.getElementById('pill-st-storico').className = 'tab-pill'+(tab==='storico'?' active':'');
   document.getElementById('pill-st-report').className = 'tab-pill'+(tab==='report'?' active':'');
-  document.getElementById('btn-excel-storico').style.display = tab==='storico'?'flex':'none';
+  // Visitatore: nascondi excel storico e azzera, mostra solo report
+  const isVis=currentUser&&currentUser.role==='visitatore';
+  document.getElementById('btn-excel-storico').style.display = (tab==='storico'&&!isVis)?'flex':'none';
   document.getElementById('btn-scarica-tutti').style.display = tab==='report'?'flex':'none';
+  const az=document.getElementById('btn-azzera');if(az)az.style.display=isVis?'none':'flex';
   if(tab==='report') loadReportGiornalieri();
 }
 
@@ -1004,6 +1042,11 @@ async function loadReportGiornalieri(){
     const cur=sel.value;
     sel.innerHTML='<option value="all">— Tutti i clienti —</option>'+clientsList.map(c=>`<option value="${c.name}">${c.name}</option>`).join('');
     sel.value=cur;
+  }
+  // Visitatore: forza cliente e blocca filtro
+  if(currentUser.role==='visitatore'){
+    const visC=currentUser.vis_client||'all';
+    if(sel){sel.value=visC;sel.disabled=true;}
   }
   const{data}=await sb.from('logs').select('*,users(name)').order('created_at',{ascending:false}).limit(1000);
   allLogsCache=data||[];
@@ -1652,9 +1695,9 @@ async function loadUsers(){
       <div class="avatar" style="background:${u.role==='admin'?'#f0eeff;color:#5b21b6':'var(--accent-light);color:var(--accent)'}">${u.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}</div>
       <div style="flex:1">
         <div style="font-size:14px;font-weight:600;">${u.name}${u.username==='admin'?' <i class="ti ti-lock" style="font-size:12px;color:var(--muted);"></i>':''}</div>
-        <div style="font-size:12px;color:var(--muted);">${u.floor||'—'} · @${u.username}</div>
+        <div style="font-size:12px;color:var(--muted);">${u.floor||'—'} · @${u.username}${u.role==='visitatore'&&u.vis_client?' · '+u.vis_client:''}</div>
       </div>
-      <span class="badge ${u.role==='admin'?'badge-purple':'badge-accent'}">${u.role==='admin'?'Admin':'Op.'}</span>
+      <span class="badge ${u.role==='admin'?'badge-purple':u.role==='visitatore'?'badge-amber':'badge-accent'}">${u.role==='admin'?'Admin':u.role==='visitatore'?'Vis.':'Op.'}</span>
       <button class="btn btn-sm" onclick="${u.username==='admin'?`requestUserPin('edit','${u.id}')`:`openUserModal('${u.id}')`}" style="margin-left:6px"><i class="ti ti-edit"></i></button>
       <button class="btn btn-sm btn-danger" onclick="${u.username==='admin'?`requestUserPin('delete','${u.id}','${u.name.replace(/'/g,"\\'")}')`:`deleteUser('${u.id}','${u.name.replace(/'/g,"\\'")}')` }" style="margin-left:4px"><i class="ti ti-trash"></i></button>
     </div>`).join('')||'<div style="text-align:center;padding:1rem;color:var(--muted);">Nessun utente.</div>';
@@ -1672,14 +1715,15 @@ async function executePendingUserAction(){
 function openUserModal(id){
   editUserId=id||null;
   document.getElementById('um-title').textContent=id?'Modifica utente':'Nuovo utente';
-  if(id){sb.from('users').select('*').eq('id',id).single().then(({data})=>{if(!data)return;document.getElementById('um-name').value=data.name;document.getElementById('um-user').value=data.username;document.getElementById('um-pass').value=data.password;document.getElementById('um-floor').value=data.floor||'Piano terra';setRole(data.role);});}
+  if(id){sb.from('users').select('*').eq('id',id).single().then(({data})=>{if(!data)return;document.getElementById('um-name').value=data.name;document.getElementById('um-user').value=data.username;document.getElementById('um-pass').value=data.password;document.getElementById('um-floor').value=data.floor||'Piano terra';setRole(data.role);if(data.role==='visitatore'&&data.vis_client){setTimeout(()=>{const sel=document.getElementById('um-vis-client');if(sel)sel.value=data.vis_client;},100);}});}
   else{document.getElementById('um-name').value='';document.getElementById('um-user').value='';document.getElementById('um-pass').value='';document.getElementById('um-floor').value='Piano terra';setRole('operatore');}
   openModal('user-modal');
 }
 async function saveUser(){
   const name=document.getElementById('um-name').value.trim(),username=document.getElementById('um-user').value.trim().toLowerCase(),password=document.getElementById('um-pass').value;
   if(!name||!username)return;
-  const obj={name,username,password:password||'1234',role:selectedRole,floor:document.getElementById('um-floor').value};
+  const visClient=selectedRole==='visitatore'?(document.getElementById('um-vis-client')?.value||'all'):null;
+  const obj={name,username,password:password||'1234',role:selectedRole,floor:document.getElementById('um-floor').value,vis_client:visClient};
   if(editUserId)await sb.from('users').update(obj).eq('id',editUserId);
   else await sb.from('users').insert(obj);
   closeModal('user-modal');loadUsers();showToast(editUserId?'Aggiornato':'Creato');
@@ -1693,7 +1737,18 @@ function setRole(r){
   selectedRole=r;
   document.getElementById('rb-admin').className='role-btn'+(r==='admin'?' active':'');
   document.getElementById('rb-op').className='role-btn'+(r==='operatore'?' active':'');
-  document.getElementById('role-desc').textContent=r==='admin'?'Accesso completo':'Solo scansione, ordini e storico';
+  document.getElementById('rb-vis').className='role-btn'+(r==='visitatore'?' active':'');
+  const desc={admin:'Accesso completo',operatore:'Solo scansione, ordini e storico',visitatore:'Solo dashboard e report — sola lettura'};
+  document.getElementById('role-desc').textContent=desc[r]||'';
+  // Show/hide client selector for visitatore
+  const wrap=document.getElementById('vis-client-wrap');
+  if(wrap){
+    wrap.style.display=r==='visitatore'?'block':'none';
+    if(r==='visitatore'){
+      const sel=document.getElementById('um-vis-client');
+      sel.innerHTML='<option value="all">— Tutti i clienti —</option>'+clientsList.map(c=>`<option value="${c.name}">${c.name}</option>`).join('');
+    }
+  }
 }
 
 // ══ QR MODAL ══
