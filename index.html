@@ -814,8 +814,14 @@ function setupNav(){
       {p:'operatore',icon:'ti-scan',label:'Scansione'},
       {p:'utenti',icon:'ti-users',label:'Utenti'},
     ];
-    // Bottom nav (mobile): mostra solo le prime 5
-    const mobileTabs=tabs.slice(0,5);
+    // Bottom nav (mobile): Home, Zone, Storico, Ordini, Chat
+    const mobileTabs=[
+      {p:'dashboard',icon:'ti-layout-dashboard',label:'Home'},
+      {p:'storico',icon:'ti-history',label:'Storico'},
+      {p:'ordini-admin',icon:'ti-shopping-cart',label:'Ordini'},
+      {p:'messaggi',icon:'ti-message-circle',label:'Chat'},
+      {p:'operatore',icon:'ti-scan',label:'Scan'},
+    ];
     bottomNav.innerHTML=mobileTabs.map(t=>`<button class="bottom-tab" onclick="showPage('${t.p}')" id="btab-${t.p}"><i class="ti ${t.icon}"></i>${t.p==='ordini-admin'?'<span class="notif-badge" id="notif-mobile"></span>':''}${t.p==='messaggi'?'<span class="notif-badge" id="msg-notif-mobile"></span>':''}<span>${t.label}</span></button>`).join('');
     // Desktop top nav
     navTabs.style.display='flex';
