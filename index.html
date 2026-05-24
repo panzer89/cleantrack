@@ -12,8 +12,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
 <style>
 :root{--bg:#f5f5f0;--surface:#fff;--border:#e0ddd5;--text:#1a1a18;--muted:#7a7a72;--accent:#1a5c3a;--accent-light:#e8f2ec;--danger:#c0392b;--danger-light:#fdf0ee;--warning:#d68910;--warning-light:#fef9e7;--success:#1a7a42;--success-light:#eafaf1;--radius:12px;--radius-sm:8px;--nav-h:60px;--bottom-h:64px;}
@@ -265,11 +263,26 @@ textarea.form-input{resize:none;}
     <div class="page-header">
       <span class="page-title">Storico</span>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="btn btn-success btn-sm" onclick="exportExcel()"><i class="ti ti-file-spreadsheet"></i> Excel</button>
+        <button class="btn btn-success btn-sm" id="btn-excel-storico" onclick="exportExcel()"><i class="ti ti-file-spreadsheet"></i> Excel</button>
+        <button class="btn btn-primary btn-sm" id="btn-scarica-tutti" style="display:none;" onclick="scaricaTuttiReport()"><i class="ti ti-download"></i> Scarica tutti</button>
         <button class="btn btn-danger btn-sm" onclick="startAzzera()"><i class="ti ti-trash"></i> Azzera</button>
       </div>
     </div>
-    <div id="storico-list"><div style="text-align:center;padding:1rem;color:var(--muted);">Caricamento...</div></div>
+    <div class="tab-pills">
+      <div class="tab-pill active" id="pill-st-storico" onclick="switchStoricoTab('storico')"><i class="ti ti-list"></i> Scansioni</div>
+      <div class="tab-pill" id="pill-st-report" onclick="switchStoricoTab('report')"><i class="ti ti-calendar-stats"></i> Report giornalieri</div>
+    </div>
+    <div id="st-tab-storico">
+      <div id="storico-list"><div style="text-align:center;padding:1rem;color:var(--muted);">Caricamento...</div></div>
+    </div>
+    <div id="st-tab-report" style="display:none;">
+      <div style="margin-bottom:12px;">
+        <select class="form-input" id="report-client-filter" style="font-size:13px;" onchange="renderReportGiornalieri()">
+          <option value="all">— Tutti i clienti —</option>
+        </select>
+      </div>
+      <div id="report-list"><div style="text-align:center;padding:1rem;color:var(--muted);">Caricamento...</div></div>
+    </div>
   </div>
 
   <!-- ORDINI ADMIN -->
@@ -287,10 +300,7 @@ textarea.form-input{resize:none;}
     </div>
     <div id="tab-ricevuti" style="display:none;">
       <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn btn-success btn-sm" onclick="exportOrdiniExcel()"><i class="ti ti-file-spreadsheet"></i> Excel</button>
-          <button class="btn btn-primary btn-sm" onclick="condividiOrdiniPDF()"><i class="ti ti-share"></i> Invia PDF</button>
-        </div>
+        <button class="btn btn-success btn-sm" onclick="exportOrdiniExcel()"><i class="ti ti-file-spreadsheet"></i> Esporta Excel</button>
       </div>
       <div id="orders-received"></div>
     </div>
@@ -740,7 +750,11 @@ function showPage(p){
   const nt=document.getElementById('ntab-'+p);if(nt)nt.classList.add('active');
   if(p==='dashboard')loadDashboard();
   if(p==='zone')loadZones();
-  if(p==='storico')loadStorico();
+  if(p==='storico'){
+    // reset to storico tab
+    switchStoricoTab('storico');
+    loadStorico();
+  }
   if(p==='ordini-admin'){loadProducts();loadOrdersReceived();}
   if(p==='clienti')loadClients();
   if(p==='operatore')loadOpStorico();
@@ -866,6 +880,248 @@ async function deleteZone(id,name){
 }
 
 // ══ STORICO ══
+// ══ STORICO TABS ══
+let allLogsCache = [];
+let currentStoricoTab = 'storico';
+
+function switchStoricoTab(tab){
+  currentStoricoTab = tab;
+  document.getElementById('st-tab-storico').style.display = tab==='storico'?'block':'none';
+  document.getElementById('st-tab-report').style.display = tab==='report'?'block':'none';
+  document.getElementById('pill-st-storico').className = 'tab-pill'+(tab==='storico'?' active':'');
+  document.getElementById('pill-st-report').className = 'tab-pill'+(tab==='report'?' active':'');
+  document.getElementById('btn-excel-storico').style.display = tab==='storico'?'flex':'none';
+  document.getElementById('btn-scarica-tutti').style.display = tab==='report'?'flex':'none';
+  if(tab==='report') loadReportGiornalieri();
+}
+
+async function loadReportGiornalieri(){
+  document.getElementById('report-list').innerHTML='<div style="text-align:center;padding:1rem;color:var(--muted);">Caricamento...</div>';
+  // Refresh client filter
+  const sel=document.getElementById('report-client-filter');
+  if(sel&&clientsList.length){
+    const cur=sel.value;
+    sel.innerHTML='<option value="all">— Tutti i clienti —</option>'+clientsList.map(c=>`<option value="${c.name}">${c.name}</option>`).join('');
+    sel.value=cur;
+  }
+  const{data}=await sb.from('logs').select('*,users(name)').order('created_at',{ascending:false}).limit(1000);
+  allLogsCache=data||[];
+  renderReportGiornalieri();
+}
+
+function renderReportGiornalieri(){
+  const clientFilter=document.getElementById('report-client-filter')?.value||'all';
+  // Group logs by date
+  const byDay={};
+  allLogsCache.forEach(l=>{
+    const day=new Date(l.created_at).toLocaleDateString('it-IT');
+    if(!byDay[day])byDay[day]=[];
+    byDay[day].push(l);
+  });
+  // Get all zones
+  sb.from('zones').select('*').order('client').order('name').then(({data:zones})=>{
+    const allZones=zones||[];
+    const filteredZones=clientFilter==='all'?allZones:allZones.filter(z=>z.client===clientFilter);
+    const days=Object.keys(byDay).sort((a,b)=>{
+      const da=new Date(a.split('/').reverse().join('-'));
+      const db=new Date(b.split('/').reverse().join('-'));
+      return db-da;
+    });
+    if(!days.length){document.getElementById('report-list').innerHTML='<div style="text-align:center;padding:1rem;color:var(--muted);">Nessun dato disponibile.</div>';return;}
+    document.getElementById('report-list').innerHTML=days.map((day,idx)=>{
+      const dayLogs=byDay[day];
+      const doneIds=new Set(dayLogs.filter(l=>l.ok).map(l=>l.zone_id));
+      const completate=filteredZones.filter(z=>doneIds.has(z.id));
+      const mancanti=filteredZones.filter(z=>!doneIds.has(z.id));
+      const tot=filteredZones.length;
+      const pct=tot>0?Math.round(completate.length/tot*100):0;
+      const barColor=pct===100?'var(--success)':pct>=70?'#1a5c3a':'var(--warning)';
+      return `<div class="card" style="margin-bottom:8px;overflow:hidden;">
+        <div style="cursor:pointer;display:flex;align-items:center;gap:10px;" onclick="toggleReportDay('rd${idx}','rc${idx}')">
+          <div style="flex:1;">
+            <div style="font-size:14px;font-weight:500;color:var(--text);margin-bottom:2px;"><i class="ti ti-calendar" style="color:#1a5c3a;margin-right:4px;"></i>${day}</div>
+            <div style="font-size:12px;color:var(--muted);">${completate.length}/${tot} completate · ${pct}%</div>
+            <div style="background:var(--border);border-radius:20px;height:5px;width:100%;overflow:hidden;margin-top:5px;">
+              <div style="height:100%;width:${pct}%;background:${barColor};border-radius:20px;"></div>
+            </div>
+          </div>
+          <i class="ti ti-chevron-down" id="rc${idx}" style="color:var(--muted);transition:.2s;font-size:18px;flex-shrink:0;"></i>
+        </div>
+        <div id="rd${idx}" style="display:none;margin-top:12px;padding-top:12px;border-top:0.5px solid var(--border);">
+          ${mancanti.length===0?
+            `<div style="text-align:center;padding:.5rem;font-size:13px;color:var(--success);"><i class="ti ti-circle-check" style="font-size:24px;display:block;margin-bottom:4px;"></i>Tutte le zone completate!</div>`:
+            `<div style="font-size:11px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Zone mancanti</div>
+            ${mancanti.slice(0,5).map(z=>`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:0.5px solid var(--border);font-size:12px;">
+              <div style="width:7px;height:7px;border-radius:50%;background:var(--danger);flex-shrink:0;"></div>
+              <span style="flex:1;color:var(--text);">${z.name}</span>
+              <span style="color:var(--muted);">${z.client}</span>
+            </div>`).join('')}
+            ${mancanti.length>5?`<div style="font-size:11px;color:var(--muted);padding-top:4px;">+ ${mancanti.length-5} altre zone mancanti</div>`:''}`
+          }
+          <div style="display:flex;gap:8px;margin-top:10px;">
+            <button class="btn btn-success btn-sm" style="flex:1;" onclick="exportReportDayExcel('${day}',${idx})"><i class="ti ti-file-spreadsheet"></i> Excel</button>
+            <button class="btn btn-primary btn-sm" style="flex:1;" onclick="condividiReportDay('${day}',${idx})"><i class="ti ti-share"></i> Invia PDF</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  });
+}
+
+function toggleReportDay(detailId,chevronId){
+  const el=document.getElementById(detailId);
+  const ch=document.getElementById(chevronId);
+  const open=el.style.display==='none';
+  el.style.display=open?'block':'none';
+  ch.style.transform=open?'rotate(180deg)':'rotate(0)';
+}
+
+async function exportReportDayExcel(day,idx){
+  const clientFilter=document.getElementById('report-client-filter')?.value||'all';
+  const{data:zones}=await sb.from('zones').select('*').order('client').order('name');
+  const allZones=zones||[];
+  const filteredZones=clientFilter==='all'?allZones:allZones.filter(z=>z.client===clientFilter);
+  const dayLogs=allLogsCache.filter(l=>new Date(l.created_at).toLocaleDateString('it-IT')===day);
+  const doneIds=new Set(dayLogs.filter(l=>l.ok).map(l=>l.zone_id));
+  const completate=filteredZones.filter(z=>doneIds.has(z.id));
+  const mancanti=filteredZones.filter(z=>!doneIds.has(z.id));
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet([
+    ['Data','Zona','Cliente','Operatore','Ora','Stato','Foto'],
+    ...completate.map(z=>{
+      const log=dayLogs.find(l=>l.zone_id===z.id&&l.ok);
+      return [day,z.name,z.client,log?.users?.name||'—',log?fmt(log.created_at):'—','Completata',log?.photo_url?'Sì':'No'];
+    }),
+    ...mancanti.map(z=>[day,z.name,z.client,'—','—','Non completata','No'])
+  ]);
+  ws['!cols']=[{wch:12},{wch:30},{wch:18},{wch:16},{wch:8},{wch:14},{wch:6}];
+  XLSX.utils.book_append_sheet(wb,ws,'Report '+day);
+  XLSX.writeFile(wb,`CleanTrack_Report_${day.replace(/\//g,'-')}.xlsx`);
+  showToast('Excel scaricato!');
+}
+
+async function condividiReportDay(day,idx){
+  const clientFilter=document.getElementById('report-client-filter')?.value||'all';
+  const{data:zones}=await sb.from('zones').select('*').order('client').order('name');
+  const allZones=zones||[];
+  const filteredZones=clientFilter==='all'?allZones:allZones.filter(z=>z.client===clientFilter);
+  const dayLogs=allLogsCache.filter(l=>new Date(l.created_at).toLocaleDateString('it-IT')===day);
+  const doneIds=new Set(dayLogs.filter(l=>l.ok).map(l=>l.zone_id));
+  const completate=filteredZones.filter(z=>doneIds.has(z.id));
+  const mancanti=filteredZones.filter(z=>!doneIds.has(z.id));
+  const tot=filteredZones.length;
+  const pct=tot>0?Math.round(completate.length/tot*100):0;
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const clientLabel=clientFilter==='all'?'Tutti i clienti':clientFilter;
+  // Header
+  doc.setFillColor(26,92,58);doc.rect(0,0,210,22,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(15);doc.setFont('helvetica','bold');doc.text('CleanTrack',14,11);
+  doc.setFontSize(10);doc.setFont('helvetica','normal');doc.text('Report giornaliero pulizie — '+clientLabel,14,18);
+  doc.setFontSize(11);doc.setFont('helvetica','bold');doc.text(day,196,11,{align:'right'});
+  doc.setFontSize(9);doc.setFont('helvetica','normal');doc.text('Generato il '+new Date().toLocaleDateString('it-IT'),196,18,{align:'right'});
+  // Stats boxes
+  const bw=55,bh=16,by=26;
+  doc.setFillColor(232,242,236);doc.roundedRect(14,by,bw,bh,2,2,'F');
+  doc.setTextColor(26,92,58);doc.setFontSize(18);doc.setFont('helvetica','bold');doc.text(String(tot),41,by+8,{align:'center'});
+  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.text('Zone totali',41,by+13,{align:'center'});
+  doc.setFillColor(234,250,241);doc.roundedRect(73,by,bw,bh,2,2,'F');
+  doc.setTextColor(26,122,66);doc.setFontSize(18);doc.setFont('helvetica','bold');doc.text(String(completate.length),100,by+8,{align:'center'});
+  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.text('Completate',100,by+13,{align:'center'});
+  doc.setFillColor(253,240,238);doc.roundedRect(132,by,bw,bh,2,2,'F');
+  doc.setTextColor(192,57,43);doc.setFontSize(18);doc.setFont('helvetica','bold');doc.text(String(mancanti.length),159,by+8,{align:'center'});
+  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.text('Mancanti',159,by+13,{align:'center'});
+  // Progress bar
+  doc.setFillColor(220,220,215);doc.roundedRect(14,46,182,4,2,2,'F');
+  const barColor=pct===100?[26,122,66]:pct>=70?[26,92,58]:[214,137,16];
+  doc.setFillColor(...barColor);doc.roundedRect(14,46,182*pct/100,4,2,2,'F');
+  doc.setTextColor(...barColor);doc.setFontSize(8);doc.setFont('helvetica','bold');doc.text(pct+'% completato',196,49,{align:'right'});
+  // Completate table
+  if(completate.length>0){
+    doc.setTextColor(26,92,58);doc.setFontSize(10);doc.setFont('helvetica','bold');doc.text('Zone completate ('+completate.length+')',14,58);
+    doc.autoTable({
+      startY:61,
+      head:[['Zona','Cliente','Operatore','Ora','Foto']],
+      body:completate.map(z=>{const log=dayLogs.find(l=>l.zone_id===z.id&&l.ok);return[z.name,z.client,log?.users?.name||'—',log?fmt(log.created_at):'—',log?.photo_url?'Si':'—'];}),
+      styles:{fontSize:8,cellPadding:2},
+      headStyles:{fillColor:[26,92,58],textColor:255,fontStyle:'bold'},
+      alternateRowStyles:{fillColor:[232,242,236]},
+      columnStyles:{0:{cellWidth:55},1:{cellWidth:38},2:{cellWidth:38},3:{cellWidth:18},4:{cellWidth:15}},
+      margin:{left:14,right:14},
+    });
+  }
+  // Mancanti table
+  if(mancanti.length>0){
+    const y2=(doc.lastAutoTable?.finalY||58)+6;
+    doc.setTextColor(192,57,43);doc.setFontSize(10);doc.setFont('helvetica','bold');doc.text('Zone non completate ('+mancanti.length+')',14,y2);
+    doc.autoTable({
+      startY:y2+3,
+      head:[['Zona','Cliente','Piano']],
+      body:mancanti.map(z=>[z.name,z.client,z.floor||'—']),
+      styles:{fontSize:8,cellPadding:2},
+      headStyles:{fillColor:[192,57,43],textColor:255,fontStyle:'bold'},
+      alternateRowStyles:{fillColor:[253,240,238]},
+      columnStyles:{0:{cellWidth:75},1:{cellWidth:55},2:{cellWidth:34}},
+      margin:{left:14,right:14},
+    });
+  }
+  // Footer
+  const pages=doc.internal.getNumberOfPages();
+  for(let i=1;i<=pages;i++){
+    doc.setPage(i);
+    doc.setFillColor(26,92,58);doc.rect(0,285,210,12,'F');
+    doc.setTextColor(255,255,255);doc.setFontSize(8);doc.setFont('helvetica','normal');
+    doc.text('cleantrack-amber.vercel.app',14,292);
+    doc.text('pag. '+i+'/'+pages,196,292,{align:'right'});
+  }
+  const blob=doc.output('blob');
+  const fileName='CleanTrack_Report_'+day.replace(/\//g,'-')+'.pdf';
+  const file=new File([blob],fileName,{type:'application/pdf'});
+  if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+    try{await navigator.share({title:'Report '+day,files:[file]});return;}catch(e){}
+  }
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=fileName;a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  showToast('PDF pronto!');
+}
+
+async function scaricaTuttiReport(){
+  const clientFilter=document.getElementById('report-client-filter')?.value||'all';
+  const{data:zones}=await sb.from('zones').select('*').order('client').order('name');
+  const allZones=zones||[];
+  const filteredZones=clientFilter==='all'?allZones:allZones.filter(z=>z.client===clientFilter);
+  const byDay={};
+  allLogsCache.forEach(l=>{
+    const day=new Date(l.created_at).toLocaleDateString('it-IT');
+    if(!byDay[day])byDay[day]=[];
+    byDay[day].push(l);
+  });
+  const days=Object.keys(byDay).sort((a,b)=>{
+    const da=new Date(a.split('/').reverse().join('-'));
+    const db=new Date(b.split('/').reverse().join('-'));
+    return db-da;
+  });
+  const wb=XLSX.utils.book_new();
+  days.forEach(day=>{
+    const dayLogs=byDay[day];
+    const doneIds=new Set(dayLogs.filter(l=>l.ok).map(l=>l.zone_id));
+    const completate=filteredZones.filter(z=>doneIds.has(z.id));
+    const mancanti=filteredZones.filter(z=>!doneIds.has(z.id));
+    const ws=XLSX.utils.aoa_to_sheet([
+      ['Zona','Cliente','Operatore','Ora','Stato','Foto'],
+      ...completate.map(z=>{const log=dayLogs.find(l=>l.zone_id===z.id&&l.ok);return[z.name,z.client,log?.users?.name||'—',log?fmt(log.created_at):'—','Completata',log?.photo_url?'Sì':'No'];}),
+      ...mancanti.map(z=>[z.name,z.client,'—','—','Non completata','No'])
+    ]);
+    ws['!cols']=[{wch:30},{wch:18},{wch:16},{wch:8},{wch:14},{wch:6}];
+    XLSX.utils.book_append_sheet(wb,ws,day.replace(/\//g,'-'));
+  });
+  const clientLabel=clientFilter==='all'?'Tutti':clientFilter.replace(/\s/g,'_');
+  XLSX.writeFile(wb,`CleanTrack_Report_Completo_${clientLabel}.xlsx`);
+  showToast('Excel completo scaricato!');
+}
+
 async function loadStorico(){
   const{data}=await sb.from('logs').select('*,users(name)').order('created_at',{ascending:false}).limit(300);
   document.getElementById('storico-list').innerHTML=(data||[]).map(l=>`
@@ -972,54 +1228,6 @@ async function exportOrdiniExcel(){
   const today=new Date().toLocaleDateString('it-IT').replace(/\//g,'-');
   XLSX.writeFile(wb,`CleanTrack_Ordini_${today}.xlsx`);
   showToast('Excel ordini scaricato!');
-}
-async function condividiOrdiniPDF(){
-  const{data,error}=await sb.from('orders').select('*,users(name)').order('created_at',{ascending:false});
-  if(error||!data||!data.length){showToast('Nessun ordine da condividere',false);return;}
-  const{jsPDF}=window.jspdf;
-  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-  const today=new Date().toLocaleDateString('it-IT');
-  doc.setFillColor(26,92,58);
-  doc.rect(0,0,210,18,'F');
-  doc.setTextColor(255,255,255);
-  doc.setFontSize(14);doc.setFont('helvetica','bold');
-  doc.text('CleanTrack — Ordini',14,12);
-  doc.setFontSize(10);doc.setFont('helvetica','normal');
-  doc.text('Estratto il '+today,196,12,{align:'right'});
-  const rows=data.map(o=>[
-    fmtDate(o.created_at)+' '+fmt(o.created_at),
-    o.users?.name||'—',
-    o.product_name||'—',
-    (o.quantity||1)+' '+(o.unit||''),
-    o.note||'',
-    o.evaso?'Evaso':'In attesa'
-  ]);
-  doc.autoTable({
-    startY:22,
-    head:[['Data/Ora','Operatore','Prodotto','Qtà','Nota','Stato']],
-    body:rows,
-    styles:{fontSize:9,cellPadding:3},
-    headStyles:{fillColor:[26,92,58],textColor:255,fontStyle:'bold'},
-    alternateRowStyles:{fillColor:[232,242,236]},
-    columnStyles:{0:{cellWidth:28},1:{cellWidth:28},2:{cellWidth:38},3:{cellWidth:18},4:{cellWidth:48},5:{cellWidth:22}},
-    margin:{left:14,right:14},
-  });
-  const pages=doc.internal.getNumberOfPages();
-  for(let i=1;i<=pages;i++){
-    doc.setPage(i);
-    doc.setFontSize(8);doc.setTextColor(150,150,150);
-    doc.text('cleantrack-amber.vercel.app — pag. '+i+'/'+pages,105,290,{align:'center'});
-  }
-  const pdfBlob=doc.output('blob');
-  const fileName='CleanTrack_Ordini_'+today.replace(/\//g,'-')+'.pdf';
-  const file=new File([pdfBlob],fileName,{type:'application/pdf'});
-  if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
-    try{await navigator.share({title:'Ordini CleanTrack',files:[file]});return;}catch(e){}
-  }
-  const url=URL.createObjectURL(pdfBlob);
-  const a=document.createElement('a');a.href=url;a.download=fileName;a.click();
-  setTimeout(()=>URL.revokeObjectURL(url),1000);
-  showToast('PDF pronto!');
 }
 async function toggleEvaso(id,val){
   await sb.from('orders').update({evaso:val}).eq('id',id);
