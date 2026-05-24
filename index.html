@@ -946,7 +946,9 @@ async function loadDashboard(){
       if(vl){vl.style.display='inline';vl.textContent=currentUser.vis_client;}
     }
   }
-  const today=new Date().toISOString().split('T')[0];
+  // Usa data locale italiana (non UTC) per evitare sfasamenti di fuso orario
+  const nowLocal=new Date();
+  const today=nowLocal.getFullYear()+'-'+String(nowLocal.getMonth()+1).padStart(2,'0')+'-'+String(nowLocal.getDate()).padStart(2,'0');
   const[{data:zones},{data:logs},{data:orders}]=await Promise.all([
     sb.from('zones').select('*').order('client').order('name'),
     sb.from('logs').select('*,users(name)').gte('created_at',today).order('created_at',{ascending:false}).limit(50),
