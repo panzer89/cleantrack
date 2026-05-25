@@ -259,6 +259,27 @@ body{overflow:hidden !important;}
 /* Avatar sidebar */
 .sb-user{display:flex;align-items:center;gap:10px;padding:.5rem .875rem;}
 .sb-avatar{width:32px;height:32px;border-radius:50%;background:var(--accent-light);color:var(--accent-bright);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;}
+/* MAP */
+.map-container{position:relative;width:100%;background:var(--surface2,#eeeee8);border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);min-height:460px;}
+.map-img{width:100%;height:100%;object-fit:contain;display:block;}
+.map-placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);gap:10px;padding:2rem;}
+.map-placeholder i{font-size:40px;}
+.map-pin{position:absolute;transform:translate(-50%,-50%);cursor:default;z-index:5;}
+.map-pin-inner{border-radius:6px;padding:4px 8px;font-size:10px;font-weight:700;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.35);border:1.5px solid rgba(255,255,255,.2);display:flex;align-items:center;gap:4px;max-width:130px;overflow:hidden;text-overflow:ellipsis;}
+.map-pin-inner.done{background:#155724;color:#fff;}
+.map-pin-inner.missing{background:#5A0000;color:#fff;}
+.map-pin-inner.unset{background:var(--surface2,#eeeee8);color:var(--muted);border-color:var(--border);}
+.map-pin-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.map-pin-dot.done{background:#3FB950;}
+.map-pin-dot.missing{background:#F85149;}
+.map-pin-dot.unset{background:var(--muted);}
+.map-pin.editable{cursor:crosshair;}
+.map-zone-sel{background:var(--accent);color:#fff;border-color:var(--accent);}
+/* Dashboard layout with map */
+.dash-left{display:flex;flex-direction:column;gap:1rem;}
+.dash-mini-map{border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);background:var(--surface2,#eeeee8);flex:1;min-height:220px;position:relative !important;}
+.scan-row{display:flex;align-items:center;gap:8px;padding:.45rem 0;border-bottom:1px solid var(--border);font-size:12px;}
+.scan-row:last-child{border-bottom:none;}
 @media(max-width:900px){.app-desktop{grid-template-columns:1fr;grid-template-rows:56px auto 1fr;}.sidebar{display:none;}}
 /* HIDE MOBILE ELEMENTS */
 .bottom-nav{display:none !important;}
@@ -321,6 +342,7 @@ body{overflow:hidden !important;}
     <div class="sidebar-section">Principale</div>
     <div class="nav-item active" id="snav-dashboard" onclick="dtShowPage('dashboard')"><i class="ti ti-layout-dashboard"></i> Dashboard</div>
     <div class="nav-item" id="snav-storico" onclick="dtShowPage('storico')"><i class="ti ti-history"></i> Storico</div>
+    <div class="nav-item" id="snav-mappa" onclick="dtShowPage('mappa')" style="display:none;"><i class="ti ti-map"></i> Mappa</div>
     <div class="nav-item" id="snav-messaggi" onclick="dtShowPage('messaggi')"><i class="ti ti-message-circle"></i> Chat <span class="nav-badge" id="nav-msg-badge"></span></div>
 
     <div class="sidebar-section" id="admin-section" style="margin-top:8px;">Gestione</div>
@@ -350,15 +372,74 @@ body{overflow:hidden !important;}
         <select class="form-input" style="width:auto;font-size:12px;margin-left:auto;" onchange="filterDash(this.value)" id="dash-filter"></select>
         <span id="vis-client-label" style="display:none;font-size:13px;font-weight:600;color:var(--accent-bright);margin-left:auto;"></span>
       </div>
-      <div class="stat-grid">
-        <div class="stat-card"><div class="stat-label">Zone totali</div><div class="stat-value v-blue" id="s-total">—</div></div>
-        <div class="stat-card"><div class="stat-label">Completate</div><div class="stat-value v-green" id="s-done">—</div></div>
-        <div class="stat-card"><div class="stat-label">Mancanti</div><div class="stat-value v-red" id="s-miss">—</div></div>
-        <div class="stat-card"><div class="stat-label">Ordini aperti</div><div class="stat-value v-amber" id="s-orders">—</div></div>
+      <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:1.25rem;">
+        <!-- LEFT: stats + ultime scansioni -->
+        <div class="dash-left">
+          <div class="stat-grid" style="margin-bottom:0;">
+            <div class="stat-card"><div class="stat-label">Zone totali</div><div class="stat-value v-blue" id="s-total">—</div></div>
+            <div class="stat-card"><div class="stat-label">Completate</div><div class="stat-value v-green" id="s-done">—</div></div>
+            <div class="stat-card"><div class="stat-label">Mancanti</div><div class="stat-value v-red" id="s-miss">—</div></div>
+            <div class="stat-card"><div class="stat-label">Ordini aperti</div><div class="stat-value v-amber" id="s-orders">—</div></div>
+          </div>
+          <!-- Ultime scansioni -->
+          <div class="dt-card" style="flex:1;">
+            <div class="dt-card-title"><i class="ti ti-history"></i> Ultime scansioni</div>
+            <div id="dt-scans" style="max-height:320px;overflow-y:auto;"></div>
+          </div>
+        </div>
+        <!-- RIGHT: mini mappa -->
+        <div class="dt-card" style="display:flex;flex-direction:column;min-height:400px;">
+          <div class="dt-card-title"><i class="ti ti-map"></i> Mappa oggi
+            <span style="margin-left:auto;display:flex;gap:10px;font-size:11px;color:var(--muted);">
+              <span style="display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:50%;background:#3FB950;display:inline-block;"></span>Fatta</span>
+              <span style="display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:50%;background:#F85149;display:inline-block;"></span>Da fare</span>
+            </span>
+          </div>
+          <div class="dash-mini-map" id="dash-mini-map">
+            <div class="map-placeholder" id="dash-map-placeholder">
+              <i class="ti ti-map-off"></i>
+              <span style="font-size:13px;">Nessuna pianta caricata</span>
+              <a onclick="dtShowPage('mappa')" style="font-size:12px;color:var(--accent);cursor:pointer;text-decoration:underline;">Vai alla Mappa per configurarla</a>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="dt-grid">
-        <div class="dt-card"><div class="dt-card-title"><i class="ti ti-list-check"></i> Stato zone oggi</div><div id="dt-zones"></div></div>
-        <div class="dt-card"><div class="dt-card-title"><i class="ti ti-history"></i> Attività recenti</div><div id="dt-logs"></div></div>
+    </div>
+
+    <!-- MAPPA -->
+    <div class="page" id="dt-page-mappa">
+      <div class="dt-title"><i class="ti ti-map"></i> Mappa magazzino</div>
+      <!-- Toolbar -->
+      <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+        <select class="form-input" style="width:160px;" id="map-floor-filter" onchange="renderMap()">
+          <option value="all">Tutti i piani</option>
+          <option value="Piano terra">Piano terra</option>
+          <option value="1° piano">1° piano</option>
+          <option value="Esterno">Esterno</option>
+        </select>
+        <select class="form-input" style="width:160px;" id="map-client-filter" onchange="renderMap()">
+          <option value="all">Tutti i clienti</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('map-upload-input').click()"><i class="ti ti-upload"></i> Carica pianta</button>
+        <input type="file" id="map-upload-input" accept="image/*" style="display:none;" onchange="uploadMapImage(event)">
+        <button class="btn btn-sm" id="btn-map-edit" onclick="toggleMapEdit()" style="display:none;"><i class="ti ti-edit"></i> Posiziona zone</button>
+        <button class="btn btn-danger btn-sm" id="btn-map-reset" onclick="resetMapPositions()" style="display:none;"><i class="ti ti-map-pin-off"></i> Azzera posizioni</button>
+        <button class="btn btn-danger btn-sm" id="btn-map-delete" onclick="deleteMapImage()" style="display:none;"><i class="ti ti-photo-off"></i> Elimina pianta</button>
+        <span id="map-edit-hint" style="font-size:12px;color:var(--accent);display:none;font-weight:600;"><i class="ti ti-click"></i> Seleziona una zona, poi clicca sulla mappa</span>
+      </div>
+      <!-- Zone da posizionare (edit mode) -->
+      <div id="map-unset-wrap" style="display:none;margin-bottom:10px;">
+        <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Zone da posizionare — clicca su una, poi clicca sulla mappa</div>
+        <div id="map-unset-items" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+      </div>
+      <!-- Mappa container -->
+      <div class="map-container" id="map-container" style="min-height:500px;">
+        <div class="map-placeholder" id="map-placeholder">
+          <i class="ti ti-map-off"></i>
+          <div style="font-size:15px;font-weight:600;">Nessuna pianta caricata</div>
+          <div style="font-size:13px;margin-bottom:8px;">Carica un'immagine della pianta del magazzino</div>
+          <button class="btn btn-primary btn-sm" onclick="document.getElementById('map-upload-input').click()"><i class="ti ti-upload"></i> Carica pianta</button>
+        </div>
       </div>
     </div>
 
@@ -2075,6 +2156,7 @@ function dtShowPage(p) {
   const ni = document.getElementById('snav-' + p);
   if (ni) ni.classList.add('active');
   if (p === 'dashboard') loadDashboard();
+  if (p === 'mappa') loadMappa();
   if (p === 'storico') { switchStoricoTab('storico'); loadStorico(); }
   if (p === 'zone') loadZones();
   if (p === 'ordini') { loadProducts(); loadOrdersReceived(); }
@@ -2099,6 +2181,8 @@ function setupNav() {
   const sbr = document.getElementById('sb-role'); if (sbr) sbr.textContent = isAdmin ? 'Amministratore' : isVis ? 'Visitatore' : 'Operatore';
   // Show/hide admin sections
   ['snav-zone','snav-ordini','snav-clienti','snav-utenti','admin-section'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = isAdmin ? '' : 'none'; });
+  // Mappa solo admin
+  const mapNav = document.getElementById('snav-mappa'); if (mapNav) mapNav.style.display = isAdmin ? '' : 'none';
   // Azzera solo admin
   const az = document.getElementById('btn-azzera'); if (az) az.style.display = isAdmin ? '' : 'none';
   const ex = document.getElementById('btn-excel-storico'); if (ex) ex.style.display = isVis ? 'none' : '';
@@ -2159,16 +2243,22 @@ async function loadDashboard() {
       <div style="flex:1;"><div style="font-size:13px;font-weight:500;">${z.name}</div><div style="font-size:11px;color:var(--muted);">${z.client} · ${z.floor}</div></div>
       <span class="chip ${done.has(z.id)?'chip-green':'chip-red'}">${done.has(z.id)?'✓ OK':'Da fare'}</span>
     </div>`).join('') || '<div style="text-align:center;padding:1rem;color:var(--muted);">Nessuna zona.</div>';
-  // Logs
+  // Logs — old element (kept for compatibility)
   const logsEl = document.getElementById('dt-logs');
-  if (logsEl) logsEl.innerHTML = (logs||[]).slice(0,12).map(l => `
-    <div class="dt-log-row">
-      <div class="zdot ${l.ok?'done':'miss'}"></div>
-      <span class="log-time">${fmt(l.created_at)}</span>
-      <span style="flex:1;">${l.zone_name||'—'}</span>
+  if (logsEl) logsEl.innerHTML = '';
+  // Ultime scansioni nel nuovo pannello
+  const scansEl = document.getElementById('dt-scans');
+  if (scansEl) scansEl.innerHTML = (logs||[]).slice(0,15).map(l => `
+    <div class="scan-row">
+      <div class="zdot ${l.ok?'done':'miss'}" style="flex-shrink:0;"></div>
+      <span class="log-time" style="min-width:38px;font-family:monospace;font-size:11px;color:var(--muted);">${fmt(l.created_at)}</span>
+      <span style="flex:1;font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${l.zone_name||'—'}</span>
+      <span style="font-size:11px;color:var(--muted);white-space:nowrap;">${l.users?.name?.split(' ')[0]||'—'}</span>
+      <span class="chip ${l.ok?'chip-green':'chip-amber'}" style="font-size:10px;flex-shrink:0;">${l.ok?'✓':'✗'}</span>
       ${l.photo_url?'<span style="font-size:11px;">📸</span>':''}
-      <span class="chip ${l.ok?'chip-green':'chip-amber'}" style="font-size:10px;">${l.users?.name?.split(' ')[0]||'—'}</span>
-    </div>`).join('') || '<div style="font-size:13px;color:var(--muted);">Nessuna attività oggi.</div>';
+    </div>`).join('') || '<div style="font-size:13px;color:var(--muted);padding:.5rem 0;">Nessuna attività oggi.</div>';
+  // Mini mappa dashboard — aggiorna con dashFilter corrente
+  loadDashboardMiniMap();
   // Visitatore UI
   if (isVis) {
     const df = document.getElementById('dash-filter');
@@ -2298,6 +2388,7 @@ function updateMsgBadge(count) {
 function refreshClientSelects() {
   const opts = '<option value="all">— Tutti i clienti —</option>' + clientsList.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
   ['dash-filter','zone-client-filter'].forEach(id => { const el = document.getElementById(id); if (el) { const cur = el.value; el.innerHTML = opts; if (cur) el.value = cur; } });
+
   const zm = document.getElementById('zm-client'); if (zm && clientsList.length) zm.innerHTML = clientsList.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
   const vc = document.getElementById('um-vis-client'); if (vc) vc.innerHTML = '<option value="all">— Tutti i clienti —</option>' + clientsList.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
 }
@@ -2361,4 +2452,288 @@ async function vediTuttaGiornata(day) {
   document.body.appendChild(overlay);
 }
 </script>
+
+<script>
+// ══ MAPPA MAGAZZINO ══
+let mapZones = [], mapDoneIds = new Set(), mapEditMode = false, mapImgSrc = null, selectedZoneForMap = null;
+
+async function loadMappa() {
+  console.log('[MAPPA] loadMappa() chiamata');
+  if (!clientsList.length) await loadClients();
+  // Populate client filter
+  const cf = document.getElementById('map-client-filter');
+  if (cf) {
+    const cur = cf.value;
+    cf.innerHTML = '<option value="all">Tutti i clienti</option>' + clientsList.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+    if (cur) cf.value = cur;
+  }
+  // Load zones
+  const {data: zones} = await sb.from('zones').select('*').order('client').order('name');
+  mapZones = zones || [];
+  // Load today's done
+  const nowLocal = new Date();
+  const today = nowLocal.getFullYear() + '-' + String(nowLocal.getMonth()+1).padStart(2,'0') + '-' + String(nowLocal.getDate()).padStart(2,'0');
+  const {data: logs} = await sb.from('logs').select('zone_id').eq('ok', true).gte('created_at', today);
+  mapDoneIds = new Set((logs || []).map(l => l.zone_id));
+  // Load map image
+  let mapSetting = null;
+  try {
+    const {data: setting, error} = await sb.from('settings').select('value').eq('id', 'map_image').single();
+    console.log('[MAPPA] Fetch immagine:', {found: !!setting?.value, valueLen: setting?.value?.length, error});
+    if (!error) mapSetting = setting;
+  } catch(e) { console.error('[MAPPA] Eccezione fetch:', e); }
+  mapImgSrc = mapSetting?.value || null;
+  console.log('[MAPPA] mapImgSrc impostato:', mapImgSrc ? 'SI (' + Math.round(mapImgSrc.length/1024) + 'KB)' : 'NO');
+  const placeholder = document.getElementById('map-placeholder');
+  const editBtn = document.getElementById('btn-map-edit');
+  const resetBtn = document.getElementById('btn-map-reset');
+  const deleteBtn = document.getElementById('btn-map-delete');
+  if (mapImgSrc) {
+    if (placeholder) placeholder.style.display = 'none';
+    if (editBtn) editBtn.style.display = '';
+    if (deleteBtn) deleteBtn.style.display = '';
+  } else {
+    if (placeholder) placeholder.style.display = 'flex';
+    if (editBtn) editBtn.style.display = 'none';
+    if (resetBtn) resetBtn.style.display = 'none';
+    if (deleteBtn) deleteBtn.style.display = 'none';
+  }
+  renderMap();
+}
+
+function renderMap(imgSrc) {
+  if (imgSrc) mapImgSrc = imgSrc;
+  const container = document.getElementById('map-container');
+  if (!container) return;
+  const floorFilter = document.getElementById('map-floor-filter')?.value || 'all';
+  const clientFilter = document.getElementById('map-client-filter')?.value || 'all';
+  // Remove existing pins
+  container.querySelectorAll('.map-pin').forEach(p => p.remove());
+  container.querySelector('.map-unset-info')?.remove();
+  // Set background image — always remove old and recreate
+  container.querySelectorAll('.map-img').forEach(i => i.remove());
+  if (!mapImgSrc) return;
+  const img = document.createElement('img');
+  img.className = 'map-img';
+  img.src = mapImgSrc;
+  img.style.cssText = 'width:100%;min-height:460px;max-height:70vh;object-fit:contain;display:block;';
+  const placeholder = document.getElementById('map-placeholder');
+  if (placeholder) container.insertBefore(img, placeholder);
+  else container.insertBefore(img, container.firstChild);
+  // Filter and render pins
+  let filtered = mapZones.filter(z => z.map_x != null && z.map_y != null);
+  if (floorFilter !== 'all') filtered = filtered.filter(z => z.floor === floorFilter);
+  if (clientFilter !== 'all') filtered = filtered.filter(z => z.client === clientFilter);
+  filtered.forEach(z => {
+    const isDone = mapDoneIds.has(z.id);
+    const pin = document.createElement('div');
+    pin.className = 'map-pin' + (mapEditMode ? ' editable' : '');
+    pin.style.left = z.map_x + '%';
+    pin.style.top = z.map_y + '%';
+    pin.dataset.id = z.id;
+    const shortName = z.name.length > 18 ? z.name.slice(0, 18) + '…' : z.name;
+    pin.innerHTML = `<div class="map-pin-inner ${isDone ? 'done' : 'missing'}"><div class="map-pin-dot ${isDone ? 'done' : 'missing'}"></div>${shortName}</div>`;
+    pin.title = `${z.name}
+${z.client} · ${z.floor}
+${isDone ? '✓ Completata oggi' : '✗ Non ancora completata'}`;
+    if (mapEditMode) {
+      pin.addEventListener('contextmenu', async e => {
+        e.preventDefault();
+        if (confirm('Rimuovere posizione di "' + z.name + '"?')) {
+          await sb.from('zones').update({map_x: null, map_y: null}).eq('id', z.id);
+          const mz = mapZones.find(m => m.id === z.id);
+          if (mz) { mz.map_x = null; mz.map_y = null; }
+          renderMap(); renderUnsetList(); showToast('Posizione rimossa');
+        }
+      });
+    }
+    container.appendChild(pin);
+  });
+  // Map click to place zone
+  container.onclick = async (e) => {
+    if (!mapEditMode || !selectedZoneForMap) return;
+    if (e.target.closest('.map-pin')) return;
+    const rect = container.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width * 100).toFixed(2);
+    const y = ((e.clientY - rect.top) / rect.height * 100).toFixed(2);
+    await sb.from('zones').update({map_x: parseFloat(x), map_y: parseFloat(y)}).eq('id', selectedZoneForMap);
+    const z = mapZones.find(m => m.id === selectedZoneForMap);
+    if (z) { z.map_x = parseFloat(x); z.map_y = parseFloat(y); }
+    // Clear selection
+    selectedZoneForMap = null;
+    document.querySelectorAll('.map-zone-btn').forEach(b => {b.style.background=''; b.style.color='';});
+    renderMap(); renderUnsetList(); showToast('Zona posizionata!');
+  };
+  if (mapEditMode) renderUnsetList();
+}
+
+function renderUnsetList() {
+  const floorFilter = document.getElementById('map-floor-filter')?.value || 'all';
+  const clientFilter = document.getElementById('map-client-filter')?.value || 'all';
+  let unset = mapZones.filter(z => z.map_x == null || z.map_y == null);
+  if (floorFilter !== 'all') unset = unset.filter(z => z.floor === floorFilter);
+  if (clientFilter !== 'all') unset = unset.filter(z => z.client === clientFilter);
+  const wrap = document.getElementById('map-unset-wrap');
+  const items = document.getElementById('map-unset-items');
+  if (!wrap || !items) return;
+  if (!unset.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  items.innerHTML = unset.map(z =>
+    `<button class="btn btn-sm map-zone-btn" onclick="selectZoneForMap('${z.id}',this)" style="font-size:11px;">${z.name}</button>`
+  ).join('');
+}
+
+function selectZoneForMap(id, btn) {
+  selectedZoneForMap = id;
+  document.querySelectorAll('.map-zone-btn').forEach(b => { b.style.background = ''; b.style.color = ''; });
+  btn.style.background = 'var(--accent)'; btn.style.color = '#fff';
+  showToast('Ora clicca sulla mappa per posizionare la zona');
+}
+
+function toggleMapEdit() {
+  mapEditMode = !mapEditMode;
+  selectedZoneForMap = null;
+  const btn = document.getElementById('btn-map-edit');
+  const hint = document.getElementById('map-edit-hint');
+  const resetBtn = document.getElementById('btn-map-reset');
+  const deleteBtn = document.getElementById('btn-map-delete');
+  if (btn) btn.innerHTML = mapEditMode ? '<i class="ti ti-x"></i> Esci da modifica' : '<i class="ti ti-edit"></i> Posiziona zone';
+  if (hint) hint.style.display = mapEditMode ? '' : 'none';
+  if (resetBtn) resetBtn.style.display = mapEditMode ? '' : 'none';
+  if (deleteBtn) deleteBtn.style.display = mapEditMode ? 'none' : (mapImgSrc ? '' : 'none');
+  if (!mapEditMode) { const w = document.getElementById('map-unset-wrap'); if (w) w.style.display = 'none'; }
+  renderMap();
+}
+
+async function deleteMapImage() {
+  if (!confirm('Eliminare la pianta del magazzino? I pin rimarranno salvati ma non saranno visibili finché non carichi una nuova pianta.')) return;
+  await sb.from('settings').delete().eq('id', 'map_image');
+  mapImgSrc = null;
+  // Clear container
+  const container = document.getElementById('map-container');
+  if (container) { container.querySelectorAll('.map-pin,.map-img').forEach(p => p.remove()); }
+  const placeholder = document.getElementById('map-placeholder');
+  if (placeholder) placeholder.style.display = 'flex';
+  const editBtn = document.getElementById('btn-map-edit');
+  const resetBtn = document.getElementById('btn-map-reset');
+  const deleteBtn = document.getElementById('btn-map-delete');
+  if (editBtn) editBtn.style.display = 'none';
+  if (resetBtn) resetBtn.style.display = 'none';
+  if (deleteBtn) deleteBtn.style.display = 'none';
+  // Clear dashboard mini map too
+  const miniMap = document.getElementById('dash-mini-map');
+  if (miniMap) { miniMap.querySelectorAll('.map-pin,.map-img').forEach(p => p.remove()); }
+  const dashPlaceholder = document.getElementById('dash-map-placeholder');
+  if (dashPlaceholder) dashPlaceholder.style.display = 'flex';
+  showToast('Pianta eliminata');
+}
+
+async function resetMapPositions() {
+  if (!confirm('Rimuovere tutte le posizioni dalla mappa? I pin verranno rimossi ma le zone rimangono.')) return;
+  await sb.from('zones').update({map_x: null, map_y: null}).neq('id', '00000000-0000-0000-0000-000000000000');
+  mapZones.forEach(z => { z.map_x = null; z.map_y = null; });
+  renderMap(); showToast('Posizioni azzerate');
+}
+
+async function uploadMapImage(e) {
+  const file = e.target.files[0];
+  console.log('[MAPPA] File selezionato:', file ? file.name + ' (' + Math.round(file.size/1024) + 'KB)' : 'nessuno');
+  if (!file) return;
+  e.target.value = '';
+  showToast('Ridimensionamento immagine...');
+  try {
+    console.log('[MAPPA] Avvio resize...');
+    const resized = await resizeImage(file, 1200);
+    console.log('[MAPPA] Resize ok, dimensione base64:', Math.round(resized.length/1024), 'KB');
+    showToast('Salvataggio pianta...');
+    console.log('[MAPPA] Salvataggio su Supabase...');
+    const {data, error} = await sb.from('settings').upsert({id: 'map_image', value: resized}, {onConflict: 'id'});
+    console.log('[MAPPA] Risultato upsert:', {data, error});
+    if (error) {
+      console.error('[MAPPA] Errore upsert:', error);
+      showToast('Errore salvataggio: ' + (error.message || JSON.stringify(error)), false);
+      return;
+    }
+    console.log('[MAPPA] Salvataggio ok! Ricarico mappa...');
+    mapImgSrc = resized;
+    showToast('Pianta caricata!');
+    loadMappa();
+    loadDashboardMiniMap();
+  } catch(err) {
+    console.error('[MAPPA] Eccezione:', err);
+    showToast('Errore: ' + (err.message || String(err)), false);
+  }
+}
+
+function resizeImage(file, maxWidth) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const ratio = Math.min(1, maxWidth / img.width);
+      const w = Math.round(img.width * ratio);
+      const h = Math.round(img.height * ratio);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      // Use jpeg with 0.82 quality to keep size small
+      resolve(canvas.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Impossibile leggere immagine')); };
+    img.src = url;
+  });
+}
+
+// ── MINI MAPPA DASHBOARD ──
+async function loadDashboardMiniMap() {
+  const container = document.getElementById('dash-mini-map');
+  const placeholder = document.getElementById('dash-map-placeholder');
+  if (!container) return;
+  // Use the same dashFilter as the main dashboard filter
+  const clientFilter = dashFilter || 'all';
+  // Load map image
+  let setting = null;
+  try {
+    const {data: s, error} = await sb.from('settings').select('value').eq('id', 'map_image').single();
+    if (!error) setting = s;
+  } catch(e) {}
+  if (!setting?.value) {
+    if (placeholder) placeholder.style.display = 'flex';
+    return;
+  }
+  if (placeholder) placeholder.style.display = 'none';
+  // Load today's done
+  const nowLocal = new Date();
+  const today = nowLocal.getFullYear() + '-' + String(nowLocal.getMonth()+1).padStart(2,'0') + '-' + String(nowLocal.getDate()).padStart(2,'0');
+  const {data: logs} = await sb.from('logs').select('zone_id').eq('ok', true).gte('created_at', today);
+  const done = new Set((logs || []).map(l => l.zone_id));
+  if (!mapZones.length) {
+    const {data: zones} = await sb.from('zones').select('*');
+    mapZones = zones || [];
+  }
+  // Filter zones by client
+  let pinned = mapZones.filter(z => z.map_x != null && z.map_y != null);
+  if (clientFilter !== 'all') pinned = pinned.filter(z => z.client === clientFilter);
+  // Remove existing pins and image
+  container.querySelectorAll('.map-pin,.map-img').forEach(p => p.remove());
+  // Add image
+  const img = document.createElement('img');
+  img.className = 'map-img';
+  img.src = setting.value;
+  img.style.cssText = 'width:100%;height:100%;min-height:180px;object-fit:contain;display:block;';
+  if (placeholder) container.insertBefore(img, placeholder);
+  else container.appendChild(img);
+  // Add mini pins
+  pinned.forEach(z => {
+    const isDone = done.has(z.id);
+    const pin = document.createElement('div');
+    pin.style.cssText = `position:absolute;left:${z.map_x}%;top:${z.map_y}%;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:50%;background:${isDone ? '#3FB950' : '#F85149'};border:1.5px solid ${isDone ? '#155724' : '#5A0000'};cursor:default;z-index:5;`;
+    pin.title = z.name + (isDone ? ' ✓' : ' ✗');
+    container.appendChild(pin);
+  });
+}
+</script>
+
 </body>
