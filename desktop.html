@@ -2704,18 +2704,17 @@ async function loadDashboardMiniMap() {
     return;
   }
   if (placeholder) placeholder.style.display = 'none';
-  // Load today's done
+  // Carica sempre le zone fresche con filtro cliente applicato lato DB
   const nowLocal = new Date();
   const today = nowLocal.getFullYear() + '-' + String(nowLocal.getMonth()+1).padStart(2,'0') + '-' + String(nowLocal.getDate()).padStart(2,'0');
-  const {data: logs} = await sb.from('logs').select('zone_id').eq('ok', true).gte('created_at', today);
+  let zonesQuery = sb.from('zones').select('id,name,client,map_x,map_y').not('map_x','is',null).not('map_y','is',null);
+  if (clientFilter !== 'all') zonesQuery = zonesQuery.eq('client', clientFilter);
+  const [{data: pinnedZones}, {data: logs}] = await Promise.all([
+    zonesQuery,
+    sb.from('logs').select('zone_id').eq('ok', true).gte('created_at', today)
+  ]);
   const done = new Set((logs || []).map(l => l.zone_id));
-  if (!mapZones.length) {
-    const {data: zones} = await sb.from('zones').select('*');
-    mapZones = zones || [];
-  }
-  // Filter zones by client
-  let pinned = mapZones.filter(z => z.map_x != null && z.map_y != null);
-  if (clientFilter !== 'all') pinned = pinned.filter(z => z.client === clientFilter);
+  let pinned = pinnedZones || [];
   // Remove existing pins and image
   container.querySelectorAll('.map-pin,.map-img').forEach(p => p.remove());
   // Add image
