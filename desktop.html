@@ -277,7 +277,7 @@ body{overflow:hidden !important;}
 .map-zone-sel{background:var(--accent);color:#fff;border-color:var(--accent);}
 /* Dashboard layout with map */
 .dash-left{display:flex;flex-direction:column;gap:1rem;}
-.dash-mini-map{border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);background:var(--surface2,#eeeee8);flex:1;min-height:220px;position:relative !important;aspect-ratio:1070/758;}
+.dash-mini-map{border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);background:var(--surface2,#eeeee8);flex:1;min-height:220px;position:relative !important;}
 .scan-row{display:flex;align-items:center;gap:8px;padding:.45rem 0;border-bottom:1px solid var(--border);font-size:12px;}
 .scan-row:last-child{border-bottom:none;}
 @media(max-width:900px){.app-desktop{grid-template-columns:1fr;grid-template-rows:56px auto 1fr;}.sidebar{display:none;}}
@@ -2513,7 +2513,7 @@ function renderMap(imgSrc) {
   const img = document.createElement('img');
   img.className = 'map-img';
   img.src = mapImgSrc;
-  img.style.cssText = 'width:100%;min-height:460px;max-height:70vh;object-fit:contain;display:block;';
+  img.style.cssText = 'width:100%;height:auto;display:block;';
   const placeholder = document.getElementById('map-placeholder');
   if (placeholder) container.insertBefore(img, placeholder);
   else container.insertBefore(img, container.firstChild);
@@ -2626,10 +2626,14 @@ async function deleteMapImage() {
 }
 
 async function resetMapPositions() {
-  if (!confirm('Rimuovere tutte le posizioni dalla mappa? I pin verranno rimossi ma le zone rimangono.')) return;
-  await sb.from('zones').update({map_x: null, map_y: null}).neq('id', '00000000-0000-0000-0000-000000000000');
-  mapZones.forEach(z => { z.map_x = null; z.map_y = null; });
-  renderMap(); showToast('Posizioni azzerate');
+  const clientFilter = document.getElementById('map-client-filter')?.value || 'all';
+  const label = clientFilter === 'all' ? 'tutti i clienti' : clientFilter;
+  if (!confirm('Rimuovere le posizioni per ' + label + '? I pin verranno rimossi ma le zone rimangono.')) return;
+  let q = sb.from('zones').update({map_x: null, map_y: null}).neq('id', '00000000-0000-0000-0000-000000000000');
+  if (clientFilter !== 'all') q = sb.from('zones').update({map_x: null, map_y: null}).eq('client', clientFilter);
+  await q;
+  mapZones.forEach(z => { if (clientFilter === 'all' || z.client === clientFilter) { z.map_x = null; z.map_y = null; } });
+  renderMap(); showToast('Posizioni azzerate per ' + label);
 }
 
 async function uploadMapImage(e) {
@@ -2713,10 +2717,10 @@ async function loadDashboardMiniMap() {
   const img = document.createElement('img');
   img.className = 'map-img';
   img.src = setting.value;
-  img.style.cssText = 'width:100%;height:100%;min-height:180px;object-fit:contain;display:block;';
+  img.style.cssText = 'width:100%;height:auto;display:block;';
   if (placeholder) container.insertBefore(img, placeholder);
   else container.appendChild(img);
-  // Add mini pins
+  // Add mini pins — % dirette, niente letterbox
   pinned.forEach(z => {
     const isDone = done.has(z.id);
     const pin = document.createElement('div');
