@@ -513,7 +513,6 @@ body{overflow:hidden !important;}
       <div class="dt-title"><i class="ti ti-qrcode"></i> Zone & QR code
         <div style="margin-left:auto;display:flex;gap:8px;">
           <select class="form-input" style="width:160px;font-size:12px;" id="zone-client-filter" onchange="filterZone(this.value)"></select>
-          <button class="btn btn-sm" onclick="stampaTuttiQR()"><i class="ti ti-printer"></i> Stampa tutti QR</button>
           <button class="btn btn-primary btn-sm" onclick="openZoneModal(null)"><i class="ti ti-plus"></i> Nuova zona</button>
         </div>
       </div>
@@ -1621,7 +1620,8 @@ async function confirmClean(ok){
   document.getElementById('confirm-card').style.display='none';
   const zoneId=document.getElementById('confirm-card').dataset.zoneId;
   const zoneName=document.getElementById('confirm-card').dataset.zoneName;
-  const{data:logData}=await sb.from('logs').insert({user_id:currentUser.id,zone_id:zoneId,zone_name:zoneName,ok}).select().single();
+  const{data:zoneData}=await sb.from('zones').select('client').eq('id',zoneId).single();
+  const{data:logData}=await sb.from('logs').insert({user_id:currentUser.id,zone_id:zoneId,zone_name:zoneName,client:zoneData?.client||null,ok}).select().single();
   lastLogId=logData?logData.id:null;
   const res=document.getElementById('confirm-result');res.style.display='block';
   document.getElementById('cr-icon').innerHTML=ok?'<i class="ti ti-circle-check" style="color:var(--success)"></i>':'<i class="ti ti-alert-circle" style="color:var(--warning)"></i>';
@@ -2145,50 +2145,6 @@ async function vediTuttaGiornata(day){
   document.getElementById('giornata-modal').style.display='flex';
 }
 
-async function stampaTuttiQR() {
-  // Prende le zone filtrate correnti
-  let q = sb.from('zones').select('*').order('client').order('name');
-  if (zoneFilter && zoneFilter !== 'all') q = q.eq('client', zoneFilter);
-  const {data: zones} = await q;
-  if (!zones || !zones.length) { showToast('Nessuna zona da stampare', false); return; }
-
-  // Apre finestra di stampa con tutti i QR
-  const w = window.open('', '_blank');
-  w.document.write(`<!DOCTYPE html><html><head><title>QR Code Zone</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
-  <style>
-    body{font-family:sans-serif;padding:20px;background:#fff;}
-    .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;}
-    .qr-card{border:1px solid #ddd;border-radius:8px;padding:12px;text-align:center;page-break-inside:avoid;break-inside:avoid;}
-    .qr-name{font-size:13px;font-weight:700;margin-top:8px;word-break:break-word;}
-    .qr-sub{font-size:11px;color:#666;margin-top:2px;}
-    @media print{body{padding:0;}button{display:none!important;}}
-  </style></head><body>
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-    <div><h2 style="margin:0;font-size:18px;">CleanTrack — QR Code Zone</h2>
-    <div style="font-size:12px;color:#666;">${zones.length} zone${zoneFilter !== 'all' ? ' · ' + zoneFilter : ''} · ${new Date().toLocaleDateString('it-IT')}</div></div>
-    <button onclick="window.print()" style="padding:8px 20px;background:#1a5c3a;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;">🖨 Stampa</button>
-  </div>
-  <div class="grid" id="qr-grid"></div>
-  <script>
-    const zones = ${JSON.stringify(zones)};
-    zones.forEach(z => {
-      const card = document.createElement('div');
-      card.className = 'qr-card';
-      card.innerHTML = '<div id="qr-' + z.id + '"></div><div class="qr-name">' + z.name + '</div><div class="qr-sub">' + z.client + ' · ' + z.floor + '</div>';
-      document.getElementById('qr-grid').appendChild(card);
-      new QRCode(document.getElementById('qr-' + z.id), {
-        text: 'CLEANTRACK|' + z.id + '|' + z.name + '|' + z.client,
-        width: 130, height: 130,
-        colorDark: '#000', colorLight: '#fff',
-        correctLevel: QRCode.CorrectLevel.M
-      });
-    });
-  <\/script>
-  </body></html>`);
-  w.document.close();
-}
-
 loadSavedCreds();
 tryAutoLogin();
 
@@ -2250,7 +2206,7 @@ function setupNav() {
 // Override loadStorico to use table format
 const _origLoadStorico = window.loadStorico;
 async function loadStorico() {
-  const {data} = await sb.from('logs').select('*,users(name)').order('created_at', {ascending: false}).limit(300);
+  const {data} = await sb.from('logs').select('*,users(name),zones(client)').order('created_at', {ascending: false}).limit(300);
   const tbody = document.getElementById('storico-list');
   if (!tbody) return;
   tbody.innerHTML = (data || []).map(l => `
@@ -2258,7 +2214,7 @@ async function loadStorico() {
       <td>${fmtDate(l.created_at)}</td>
       <td>${fmt(l.created_at)}</td>
       <td style="font-weight:500;">${l.zone_name || '—'}</td>
-      <td style="color:var(--muted);">${l.client || '—'}</td>
+      <td style="color:var(--muted);">${l.client || l.zones?.client || '—'}</td>
       <td>${l.users?.name || '—'}</td>
       <td><span class="chip ${l.ok ? 'chip-green' : 'chip-amber'}" style="font-size:10px;">${l.ok ? '✓ Eseguita' : '✗ Non eseg.'}</span></td>
       <td>${l.photo_url ? `<a href="${l.photo_url}" target="_blank" class="btn btn-sm" style="padding:2px 8px;"><i class="ti ti-eye"></i></a>` : '—'}</td>
