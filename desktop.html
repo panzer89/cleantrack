@@ -425,6 +425,11 @@ body{overflow:hidden !important;}
         <button class="btn btn-sm" id="btn-map-edit" onclick="toggleMapEdit()" style="display:none;"><i class="ti ti-edit"></i> Posiziona zone</button>
         <button class="btn btn-danger btn-sm" id="btn-map-reset" onclick="resetMapPositions()" style="display:none;"><i class="ti ti-map-pin-off"></i> Azzera posizioni</button>
         <button class="btn btn-danger btn-sm" id="btn-map-delete" onclick="deleteMapImage()" style="display:none;"><i class="ti ti-photo-off"></i> Elimina pianta</button>
+        <div style="display:flex;align-items:center;gap:6px;margin-left:auto;font-size:12px;color:var(--muted);">
+          <span>Pin dashboard:</span>
+          <button class="btn btn-sm" id="btn-pin-style-dot" onclick="setPinStyle('dot')" title="Pallini"><span style="font-size:14px;">🔴</span> Pallini</button>
+          <button class="btn btn-sm" id="btn-pin-style-flag" onclick="setPinStyle('flag')" title="Bandierine"><span style="font-size:14px;">🚩</span> Bandierine</button>
+        </div>
         <span id="map-edit-hint" style="font-size:12px;color:var(--accent);display:none;font-weight:600;"><i class="ti ti-click"></i> Seleziona una zona, poi clicca sulla mappa</span>
       </div>
       <!-- Zone da posizionare (edit mode) -->
@@ -2455,7 +2460,15 @@ async function vediTuttaGiornata(day) {
 
 <script>
 // ══ MAPPA MAGAZZINO ══
-let mapZones = [], mapDoneIds = new Set(), mapEditMode = false, mapImgSrc = null, selectedZoneForMap = null;
+let mapZones = [], mapDoneIds = new Set(), mapEditMode = false, mapImgSrc = null, selectedZoneForMap = null, dashPinStyle = 'dot';
+
+async function setPinStyle(style) {
+  dashPinStyle = style;
+  await sb.from('settings').upsert({id: 'dash_pin_style', value: style}, {onConflict: 'id'});
+  document.getElementById('btn-pin-style-dot').className = 'btn btn-sm' + (style === 'dot' ? ' btn-primary' : '');
+  document.getElementById('btn-pin-style-flag').className = 'btn btn-sm' + (style === 'flag' ? ' btn-primary' : '');
+  showToast('Stile pin aggiornato!');
+}
 
 async function loadMappa() {
   if (!clientsList.length) await loadClients();
@@ -2466,6 +2479,15 @@ async function loadMappa() {
     cf.innerHTML = '<option value="all">Tutti i clienti</option>' + clientsList.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
     if (cur) cf.value = cur;
   }
+  // Carica stile pin dashboard
+  try {
+    const {data: ps} = await sb.from('settings').select('value').eq('id', 'dash_pin_style').single();
+    if (ps?.value) dashPinStyle = ps.value;
+  } catch(e) {}
+  const dotBtn = document.getElementById('btn-pin-style-dot');
+  const flagBtn = document.getElementById('btn-pin-style-flag');
+  if (dotBtn) dotBtn.className = 'btn btn-sm' + (dashPinStyle === 'dot' ? ' btn-primary' : '');
+  if (flagBtn) flagBtn.className = 'btn btn-sm' + (dashPinStyle === 'flag' ? ' btn-primary' : '');
   // Load zones
   const {data: zones} = await sb.from('zones').select('*').order('client').order('name');
   mapZones = zones || [];
@@ -2720,12 +2742,21 @@ async function loadDashboardMiniMap() {
   img.style.cssText = 'width:100%;height:auto;display:block;';
   if (placeholder) container.insertBefore(img, placeholder);
   else container.appendChild(img);
-  // Add mini pins — % dirette, niente letterbox
+  // Add mini pins — stile scelto dall'utente (pallini o bandierine)
+  // Carica stile se non ancora caricato
+  if (!dashPinStyle || dashPinStyle === 'dot') {
+    try { const {data:ps} = await sb.from('settings').select('value').eq('id','dash_pin_style').single(); if(ps?.value) dashPinStyle=ps.value; } catch(e){}
+  }
   pinned.forEach(z => {
     const isDone = done.has(z.id);
     const pin = document.createElement('div');
     pin.className = 'map-pin';
-    pin.style.cssText = `position:absolute;left:${z.map_x}%;top:${z.map_y}%;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:50%;background:${isDone ? '#3FB950' : '#F85149'};border:1.5px solid ${isDone ? '#155724' : '#5A0000'};cursor:default;z-index:5;`;
+    if (dashPinStyle === 'flag') {
+      pin.style.cssText = `position:absolute;left:${z.map_x}%;top:${z.map_y}%;transform:translate(-50%,-100%);cursor:default;z-index:5;font-size:16px;line-height:1;`;
+      pin.innerHTML = `<span style="display:inline-flex;flex-direction:column;align-items:center;"><span style="width:12px;height:14px;background:${isDone?'#3FB950':'#F85149'};clip-path:polygon(0 0,100% 25%,0 50%);display:block;"></span><span style="width:2px;height:10px;background:#555;display:block;margin-left:0;"></span></span>`;
+    } else {
+      pin.style.cssText = `position:absolute;left:${z.map_x}%;top:${z.map_y}%;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:50%;background:${isDone ? '#3FB950' : '#F85149'};border:1.5px solid ${isDone ? '#155724' : '#5A0000'};cursor:default;z-index:5;`;
+    }
     pin.title = z.name + (isDone ? ' ✓' : ' ✗');
     container.appendChild(pin);
   });
