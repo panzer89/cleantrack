@@ -277,7 +277,7 @@ body{overflow:hidden !important;}
 .map-zone-sel{background:var(--accent);color:#fff;border-color:var(--accent);}
 /* Dashboard layout with map */
 .dash-left{display:flex;flex-direction:column;gap:1rem;}
-.dash-mini-map{border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);background:var(--surface2,#eeeee8);flex:1;min-height:220px;position:relative !important;}
+.dash-mini-map{border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);background:var(--surface2,#eeeee8);flex:1;min-height:220px;position:relative !important;aspect-ratio:1070/758;}
 .scan-row{display:flex;align-items:center;gap:8px;padding:.45rem 0;border-bottom:1px solid var(--border);font-size:12px;}
 .scan-row:last-child{border-bottom:none;}
 @media(max-width:900px){.app-desktop{grid-template-columns:1fr;grid-template-rows:56px auto 1fr;}.sidebar{display:none;}}
@@ -2716,29 +2716,15 @@ async function loadDashboardMiniMap() {
   img.style.cssText = 'width:100%;height:100%;min-height:180px;object-fit:contain;display:block;';
   if (placeholder) container.insertBefore(img, placeholder);
   else container.appendChild(img);
-  // Add mini pins — calcola posizione corretta con object-fit:contain
-  const addPins = () => {
-    container.querySelectorAll('.map-pin').forEach(p => p.remove());
-    const cW = container.clientWidth || container.offsetWidth;
-    const cH = container.clientHeight || container.offsetHeight;
-    const iW = img.naturalWidth || cW;
-    const iH = img.naturalHeight || cH;
-    const scale = Math.min(cW / iW, cH / iH);
-    const rW = iW * scale, rH = iH * scale;
-    const offX = (cW - rW) / 2, offY = (cH - rH) / 2;
-    pinned.forEach(z => {
-      const isDone = done.has(z.id);
-      const pin = document.createElement('div');
-      pin.className = 'map-pin';
-      const px = offX + (z.map_x / 100) * rW;
-      const py = offY + (z.map_y / 100) * rH;
-      pin.style.cssText = `position:absolute;left:${px}px;top:${py}px;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:50%;background:${isDone ? '#3FB950' : '#F85149'};border:1.5px solid ${isDone ? '#155724' : '#5A0000'};cursor:default;z-index:5;`;
-      pin.title = z.name + (isDone ? ' ✓' : ' ✗');
-      container.appendChild(pin);
-    });
-  };
-  if (img.complete && img.naturalWidth) addPins();
-  else img.onload = addPins;
+  // Add mini pins
+  pinned.forEach(z => {
+    const isDone = done.has(z.id);
+    const pin = document.createElement('div');
+    pin.className = 'map-pin';
+    pin.style.cssText = `position:absolute;left:${z.map_x}%;top:${z.map_y}%;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:50%;background:${isDone ? '#3FB950' : '#F85149'};border:1.5px solid ${isDone ? '#155724' : '#5A0000'};cursor:default;z-index:5;`;
+    pin.title = z.name + (isDone ? ' ✓' : ' ✗');
+    container.appendChild(pin);
+  });
 }
 </script>
 
