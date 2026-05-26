@@ -2458,7 +2458,6 @@ async function vediTuttaGiornata(day) {
 let mapZones = [], mapDoneIds = new Set(), mapEditMode = false, mapImgSrc = null, selectedZoneForMap = null;
 
 async function loadMappa() {
-  console.log('[MAPPA] loadMappa() chiamata');
   if (!clientsList.length) await loadClients();
   // Populate client filter
   const cf = document.getElementById('map-client-filter');
@@ -2479,11 +2478,9 @@ async function loadMappa() {
   let mapSetting = null;
   try {
     const {data: setting, error} = await sb.from('settings').select('value').eq('id', 'map_image').single();
-    console.log('[MAPPA] Fetch immagine:', {found: !!setting?.value, valueLen: setting?.value?.length, error});
     if (!error) mapSetting = setting;
   } catch(e) { console.error('[MAPPA] Eccezione fetch:', e); }
   mapImgSrc = mapSetting?.value || null;
-  console.log('[MAPPA] mapImgSrc impostato:', mapImgSrc ? 'SI (' + Math.round(mapImgSrc.length/1024) + 'KB)' : 'NO');
   const placeholder = document.getElementById('map-placeholder');
   const editBtn = document.getElementById('btn-map-edit');
   const resetBtn = document.getElementById('btn-map-reset');
@@ -2637,25 +2634,19 @@ async function resetMapPositions() {
 
 async function uploadMapImage(e) {
   const file = e.target.files[0];
-  console.log('[MAPPA] File selezionato:', file ? file.name + ' (' + Math.round(file.size/1024) + 'KB)' : 'nessuno');
   if (!file) return;
   e.target.value = '';
   showToast('Ridimensionamento immagine...');
   try {
-    console.log('[MAPPA] Avvio resize...');
-    const resized = await resizeImage(file, 1200);
-    console.log('[MAPPA] Resize ok, dimensione base64:', Math.round(resized.length/1024), 'KB');
-    showToast('Salvataggio pianta...');
-    console.log('[MAPPA] Salvataggio su Supabase...');
-    const {data, error} = await sb.from('settings').upsert({id: 'map_image', value: resized}, {onConflict: 'id'});
-    console.log('[MAPPA] Risultato upsert:', {data, error});
-    if (error) {
+      const resized = await resizeImage(file, 1200);
+      showToast('Salvataggio pianta...');
+      const {data, error} = await sb.from('settings').upsert({id: 'map_image', value: resized}, {onConflict: 'id'});
+      if (error) {
       console.error('[MAPPA] Errore upsert:', error);
       showToast('Errore salvataggio: ' + (error.message || JSON.stringify(error)), false);
       return;
     }
-    console.log('[MAPPA] Salvataggio ok! Ricarico mappa...');
-    mapImgSrc = resized;
+      mapImgSrc = resized;
     showToast('Pianta caricata!');
     loadMappa();
     loadDashboardMiniMap();
@@ -2725,15 +2716,29 @@ async function loadDashboardMiniMap() {
   img.style.cssText = 'width:100%;height:100%;min-height:180px;object-fit:contain;display:block;';
   if (placeholder) container.insertBefore(img, placeholder);
   else container.appendChild(img);
-  // Add mini pins
-  pinned.forEach(z => {
-    const isDone = done.has(z.id);
-    const pin = document.createElement('div');
-    pin.className = 'map-pin';
-    pin.style.cssText = `position:absolute;left:${z.map_x}%;top:${z.map_y}%;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:50%;background:${isDone ? '#3FB950' : '#F85149'};border:1.5px solid ${isDone ? '#155724' : '#5A0000'};cursor:default;z-index:5;`;
-    pin.title = z.name + (isDone ? ' ✓' : ' ✗');
-    container.appendChild(pin);
-  });
+  // Add mini pins — calcola posizione corretta con object-fit:contain
+  const addPins = () => {
+    container.querySelectorAll('.map-pin').forEach(p => p.remove());
+    const cW = container.clientWidth || container.offsetWidth;
+    const cH = container.clientHeight || container.offsetHeight;
+    const iW = img.naturalWidth || cW;
+    const iH = img.naturalHeight || cH;
+    const scale = Math.min(cW / iW, cH / iH);
+    const rW = iW * scale, rH = iH * scale;
+    const offX = (cW - rW) / 2, offY = (cH - rH) / 2;
+    pinned.forEach(z => {
+      const isDone = done.has(z.id);
+      const pin = document.createElement('div');
+      pin.className = 'map-pin';
+      const px = offX + (z.map_x / 100) * rW;
+      const py = offY + (z.map_y / 100) * rH;
+      pin.style.cssText = `position:absolute;left:${px}px;top:${py}px;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:50%;background:${isDone ? '#3FB950' : '#F85149'};border:1.5px solid ${isDone ? '#155724' : '#5A0000'};cursor:default;z-index:5;`;
+      pin.title = z.name + (isDone ? ' ✓' : ' ✗');
+      container.appendChild(pin);
+    });
+  };
+  if (img.complete && img.naturalWidth) addPins();
+  else img.onload = addPins;
 }
 </script>
 
