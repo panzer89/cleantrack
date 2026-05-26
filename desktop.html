@@ -2257,7 +2257,7 @@ async function loadDashboard() {
       <span class="chip ${l.ok?'chip-green':'chip-amber'}" style="font-size:10px;flex-shrink:0;">${l.ok?'✓':'✗'}</span>
       ${l.photo_url?'<span style="font-size:11px;">📸</span>':''}
     </div>`).join('') || '<div style="font-size:13px;color:var(--muted);padding:.5rem 0;">Nessuna attività oggi.</div>';
-  // Mini mappa dashboard — aggiorna con dashFilter corrente
+  // Mini mappa dashboard
   loadDashboardMiniMap();
   // Visitatore UI
   if (isVis) {
@@ -2704,17 +2704,18 @@ async function loadDashboardMiniMap() {
     return;
   }
   if (placeholder) placeholder.style.display = 'none';
-  // Carica sempre le zone fresche con filtro cliente applicato lato DB
+  // Load today's done
   const nowLocal = new Date();
   const today = nowLocal.getFullYear() + '-' + String(nowLocal.getMonth()+1).padStart(2,'0') + '-' + String(nowLocal.getDate()).padStart(2,'0');
-  let zonesQuery = sb.from('zones').select('id,name,client,map_x,map_y').not('map_x','is',null).not('map_y','is',null);
-  if (clientFilter !== 'all') zonesQuery = zonesQuery.eq('client', clientFilter);
-  const [{data: pinnedZones}, {data: logs}] = await Promise.all([
-    zonesQuery,
-    sb.from('logs').select('zone_id').eq('ok', true).gte('created_at', today)
-  ]);
+  const {data: logs} = await sb.from('logs').select('zone_id').eq('ok', true).gte('created_at', today);
   const done = new Set((logs || []).map(l => l.zone_id));
-  let pinned = pinnedZones || [];
+  if (!mapZones.length) {
+    const {data: zones} = await sb.from('zones').select('*');
+    mapZones = zones || [];
+  }
+  // Filter zones by client
+  let pinned = mapZones.filter(z => z.map_x != null && z.map_y != null);
+  if (clientFilter !== 'all') pinned = pinned.filter(z => z.client === clientFilter);
   // Remove existing pins and image
   container.querySelectorAll('.map-pin,.map-img').forEach(p => p.remove());
   // Add image
@@ -2728,6 +2729,7 @@ async function loadDashboardMiniMap() {
   pinned.forEach(z => {
     const isDone = done.has(z.id);
     const pin = document.createElement('div');
+    pin.className = 'map-pin';
     pin.style.cssText = `position:absolute;left:${z.map_x}%;top:${z.map_y}%;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:50%;background:${isDone ? '#3FB950' : '#F85149'};border:1.5px solid ${isDone ? '#155724' : '#5A0000'};cursor:default;z-index:5;`;
     pin.title = z.name + (isDone ? ' ✓' : ' ✗');
     container.appendChild(pin);
