@@ -381,6 +381,11 @@ body{overflow:hidden !important;}
             <div class="stat-card"><div class="stat-label">Mancanti</div><div class="stat-value v-red" id="s-miss">—</div></div>
             <div class="stat-card"><div class="stat-label">Ordini aperti</div><div class="stat-value v-amber" id="s-orders">—</div></div>
           </div>
+          <!-- Stato zone (scorrevole) -->
+          <div class="dt-card">
+            <div class="dt-card-title"><i class="ti ti-list-check"></i> Stato zone</div>
+            <div id="dt-zones" style="max-height:300px;overflow-y:auto;"></div>
+          </div>
           <!-- Ultime scansioni -->
           <div class="dt-card" style="flex:1;">
             <div class="dt-card-title"><i class="ti ti-history"></i> Ultime scansioni</div>
@@ -389,10 +394,16 @@ body{overflow:hidden !important;}
         </div>
         <!-- RIGHT: mini mappa -->
         <div class="dt-card" style="display:flex;flex-direction:column;min-height:400px;">
-          <div class="dt-card-title"><i class="ti ti-map"></i> Mappa oggi
-            <span style="margin-left:auto;display:flex;gap:10px;font-size:11px;color:var(--muted);">
-              <span style="display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:50%;background:#3FB950;display:inline-block;"></span>Fatta</span>
-              <span style="display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:50%;background:#F85149;display:inline-block;"></span>Da fare</span>
+          <div class="dt-card-title"><i class="ti ti-map"></i> <span id="dash-map-title">Mappa oggi</span>
+            <span style="margin-left:auto;display:flex;align-items:center;gap:10px;">
+              <span style="display:flex;gap:3px;">
+                <button class="btn btn-sm btn-primary" id="mapmode-oggi" onclick="setMapDashMode('oggi')" style="padding:3px 10px;font-size:11px;min-height:28px;">Oggi</button>
+                <button class="btn btn-sm" id="mapmode-anno" onclick="setMapDashMode('anno')" style="padding:3px 10px;font-size:11px;min-height:28px;">Anno</button>
+              </span>
+              <span id="dash-map-legend" style="display:flex;gap:10px;font-size:11px;color:var(--muted);">
+                <span style="display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:50%;background:#3FB950;display:inline-block;"></span>Fatta</span>
+                <span style="display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:50%;background:#F85149;display:inline-block;"></span>Da fare</span>
+              </span>
             </span>
           </div>
           <div class="dash-mini-map" id="dash-mini-map">
@@ -403,6 +414,10 @@ body{overflow:hidden !important;}
             </div>
           </div>
         </div>
+      </div>
+      <div class="dt-card" id="dash-scadenze-card" style="display:none;margin-top:1.25rem;">
+        <div class="dt-card-title"><i class="ti ti-calendar-due"></i> Scadenze</div>
+        <div id="dash-scadenze"></div>
       </div>
     </div>
 
@@ -452,6 +467,7 @@ body{overflow:hidden !important;}
     <div class="page" id="dt-page-storico">
       <div class="dt-title"><i class="ti ti-history"></i> Storico
         <div style="margin-left:auto;display:flex;gap:8px;">
+          <button class="btn btn-sm" id="btn-registro-mod" style="display:none;" onclick="openAuditLog(null)"><i class="ti ti-history"></i> Registro modifiche</button>
           <button class="btn btn-success btn-sm" id="btn-excel-storico" onclick="exportExcel()"><i class="ti ti-file-spreadsheet"></i> Excel</button>
           <button class="btn btn-primary btn-sm" id="btn-scarica-tutti" style="display:none;" onclick="scaricaTuttiReport()"><i class="ti ti-download"></i> Scarica tutti</button>
           <button class="btn btn-danger btn-sm" id="btn-azzera" onclick="startAzzera()"><i class="ti ti-trash"></i> Azzera tutto</button>
@@ -475,6 +491,7 @@ body{overflow:hidden !important;}
           <select class="form-input" id="report-month-filter" style="width:180px;" onchange="renderReportGiornalieri()"><option value="all">— Tutti i mesi —</option></select>
           <button class="btn btn-primary btn-sm" onclick="condividiReportMensile()"><i class="ti ti-share"></i> PDF mensile</button>
         </div>
+        <div id="report-compliance"></div>
         <div id="report-list"></div>
       </div>
     </div>
@@ -513,6 +530,7 @@ body{overflow:hidden !important;}
       <div class="dt-title"><i class="ti ti-qrcode"></i> Zone & QR code
         <div style="margin-left:auto;display:flex;gap:8px;">
           <select class="form-input" style="width:160px;font-size:12px;" id="zone-client-filter" onchange="filterZone(this.value)"></select>
+          <select class="form-input" style="width:160px;font-size:12px;" id="zone-freq-filter" onchange="filterZoneFreq(this.value)"><option value="all">— Tutte le frequenze —</option></select>
           <button class="btn btn-primary btn-sm" onclick="openZoneModal(null)"><i class="ti ti-plus"></i> Nuova zona</button>
         </div>
       </div>
@@ -553,11 +571,14 @@ body{overflow:hidden !important;}
   <div class="modal">
     <div class="modal-title" id="zm-title">Nuova zona</div>
     <div class="form-row"><label class="form-label">Nome zona</label><input class="form-input" id="zm-name" placeholder="es. Cella B, Uffici..."></div>
-    <div class="form-row"><label class="form-label">Cliente</label><select class="form-input" id="zm-client"></select></div>
+    <div class="form-row"><label class="form-label">Cliente</label><select class="form-input" id="zm-client" onchange="updateZmFreqLabel()"></select></div>
     <div class="form-row"><label class="form-label">Piano</label>
       <select class="form-input" id="zm-floor"><option>Piano terra</option><option>1° piano</option><option>Esterno</option></select></div>
     <div class="form-row"><label class="form-label">Tipo</label>
       <select class="form-input" id="zm-type"><option>Magazzino</option><option>Ufficio</option><option>Bagno / Servizi</option><option>Mensa</option><option>Spogliatoio</option><option>Esterno / Perimetrale</option><option>Ribalte</option><option>Area tecnica</option></select></div>
+    <div class="form-row"><label class="form-label">Passaggi all'anno (da capitolato)</label>
+      <input class="form-input" type="number" min="0" id="zm-passaggi" placeholder="es. 312 — vuoto se non serve" oninput="updateZmFreqLabel()">
+      <div id="zm-freq-label" style="font-size:12px;margin-top:6px;color:var(--accent);font-weight:600;"></div></div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('zone-modal')">Annulla</button>
       <button class="btn btn-primary" onclick="saveZone()"><i class="ti ti-check"></i> Salva</button>
@@ -612,6 +633,22 @@ body{overflow:hidden !important;}
   <div class="modal">
     <div class="modal-title" id="cm-title">Nuovo cliente</div>
     <div class="form-row"><label class="form-label">Nome cliente</label><input class="form-input" id="cm-name" placeholder="es. Nuovo Cliente Srl"></div>
+    <div class="form-row"><label class="form-label">Giorni lavorativi a settimana</label>
+      <select class="form-input" id="cm-giorni">
+        <option value="5">5 giorni (lun–ven)</option>
+        <option value="6" selected>6 giorni (lun–sab)</option>
+        <option value="7">7 giorni (tutti)</option>
+      </select>
+      <div style="font-size:12px;color:var(--muted);margin-top:5px;">Usato per calcolare frequenze e passaggi attesi.</div></div>
+    <div class="form-row"><label class="form-label">Giorni di chiusura (festivi, ferie…)</label>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
+        <input class="form-input" type="date" id="cm-chiusura-da" style="flex:1;min-width:130px;">
+        <span style="color:var(--muted);font-size:13px;">→</span>
+        <input class="form-input" type="date" id="cm-chiusura-a" style="flex:1;min-width:130px;">
+        <button class="btn btn-sm" type="button" onclick="cmAddChiusura()"><i class="ti ti-plus"></i></button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">2ª data vuota = un solo giorno · <a onclick="cmPreloadFestivi()" style="color:var(--accent);cursor:pointer;text-decoration:underline;">+ festivi italiani</a></div>
+      <div id="cm-chiusure-list"></div></div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('client-modal')">Annulla</button>
       <button class="btn btn-primary" onclick="saveClient()"><i class="ti ti-check"></i> Salva</button>
@@ -669,6 +706,32 @@ body{overflow:hidden !important;}
     </div>
   </div>
 
+<div class="modal-overlay" id="log-edit-modal">
+  <div class="modal">
+    <div class="modal-title"><i class="ti ti-edit"></i> Modifica scansione</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;" id="le-info"></div>
+    <div class="form-row"><label class="form-label">Stato</label>
+      <select class="form-input" id="le-stato"><option value="1">Eseguita</option><option value="0">Non eseguita</option></select></div>
+    <div class="form-row" style="display:flex;gap:8px;">
+      <div style="flex:1;"><label class="form-label">Data</label><input class="form-input" type="date" id="le-data"></div>
+      <div style="flex:1;"><label class="form-label">Ora</label><input class="form-input" type="time" id="le-ora"></div>
+    </div>
+    <div class="form-row"><label class="form-label">Operatore</label><select class="form-input" id="le-operatore"></select></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('log-edit-modal')">Annulla</button>
+      <button class="btn btn-primary" onclick="saveLogEdit()"><i class="ti ti-check"></i> Salva</button>
+    </div>
+  </div>
+</div>
+<div class="modal-overlay" id="log-audit-modal">
+  <div class="modal">
+    <div class="modal-title" id="la-title">Registro modifiche</div>
+    <div id="la-body" style="max-height:60vh;overflow-y:auto;"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('log-audit-modal')">Chiudi</button>
+    </div>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 
 
@@ -683,6 +746,195 @@ const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 let currentUser=null,dashFilter='all',zoneFilter='all',editZoneId=null,editUserId=null,editProductId=null,editClientId=null;
 let selectedRole='operatore',currentQRData={},opQtyVal=1,pinBuffer='',pinModalCallback=null,pendingUserAction=null;
 let clientsList=[],qrStream=null,qrAnimFrame=null;
+
+// ══ FREQUENZE / PASSAGGI (Fase 1) ══
+function getGiorniSettimana(clientName){
+  const c=clientsList.find(x=>x.name===clientName);
+  let g=c&&c.giorni_settimana?parseInt(c.giorni_settimana):6;
+  if(!(g>=5&&g<=7))g=6;
+  return g;
+}
+function isGiornoLavorativo(d,giorniSett){
+  const wd=d.getDay();
+  if(giorniSett>=7)return true;
+  if(giorniSett===6)return wd!==0;
+  return wd>=1&&wd<=5;
+}
+function parseChiusureVal(v){if(!v)return[];if(typeof v==='string'){try{v=JSON.parse(v);}catch(e){return[];}}if(!Array.isArray(v))return[];return v.map(x=>({from:x.from||x.d||x.da,to:x.to||x.a||x.d||x.from})).filter(x=>x.from);}
+function getChiusure(clientName){const c=clientsList.find(x=>x.name===clientName);return c?parseChiusureVal(c.giorni_chiusura):[];}
+function isChiusura(d,chiusure){
+  if(!chiusure||!chiusure.length)return false;
+  const ds=ymdLocal(d);
+  for(let k=0;k<chiusure.length;k++){const c=chiusure[k];const from=c.from||c.d;const to=c.to||c.a||from;if(from&&ds>=from&&ds<=to)return true;}
+  return false;
+}
+let cmChiusure=[];
+function cmFmtIt(s){const p=s.split('-');return p[2]+'/'+p[1]+'/'+p[0];}
+function cmRenderChiusure(){
+  const box=document.getElementById('cm-chiusure-list');
+  if(!box)return;
+  if(!cmChiusure.length){box.innerHTML='<div style="font-size:12px;color:var(--muted);">Nessuna chiusura impostata.</div>';return;}
+  const ordered=cmChiusure.map((c,idx)=>({c:c,idx:idx})).sort((a,b)=>a.c.from<b.c.from?-1:1);
+  box.innerHTML=ordered.map(o=>{
+    const c=o.c;const txt=c.from===c.to?cmFmtIt(c.from):cmFmtIt(c.from)+' → '+cmFmtIt(c.to);
+    return '<span style="display:inline-flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:3px 6px 3px 12px;margin:0 6px 6px 0;font-size:12px;"><span>'+txt+'</span><button class="btn btn-sm" type="button" style="min-height:24px;padding:2px 6px;" onclick="cmRemoveChiusura('+o.idx+')"><i class="ti ti-x"></i></button></span>';
+  }).join('');
+}
+function cmAddChiusura(){
+  const daEl=document.getElementById('cm-chiusura-da');const aEl=document.getElementById('cm-chiusura-a');
+  const da=daEl.value;let a=aEl.value;
+  if(!da){showToast('Inserisci una data',false);return;}
+  if(!a||a<da)a=da;
+  cmChiusure.push({from:da,to:a});
+  daEl.value='';aEl.value='';
+  cmRenderChiusure();
+}
+function cmRemoveChiusura(idx){cmChiusure.splice(idx,1);cmRenderChiusure();}
+function pasquaDi(year){
+  const a=year%19,b=Math.floor(year/100),c=year%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),mo=Math.floor((h+l-7*m+114)/31),da=((h+l-7*m+114)%31)+1;
+  return new Date(year,mo-1,da);
+}
+function cmPreloadFestivi(){
+  const y=new Date().getFullYear();
+  const pad=n=>String(n).padStart(2,'0');
+  const mk=(yy,mm,dd)=>yy+'-'+pad(mm)+'-'+pad(dd);
+  const fissi=[[1,1],[1,6],[4,25],[5,1],[6,2],[8,15],[11,1],[12,8],[12,25],[12,26]];
+  const date=fissi.map(p=>mk(y,p[0],p[1]));
+  const pa=pasquaDi(y);date.push(ymdLocal(new Date(pa.getTime()+86400000)));
+  let added=0;
+  date.forEach(ds=>{if(!cmChiusure.some(c=>c.from===ds&&c.to===ds)){cmChiusure.push({from:ds,to:ds});added++;}});
+  cmRenderChiusure();
+  showToast(added+' festivi aggiunti ('+y+')');
+}
+function contaGiorniLavorativi(start,end,giorniSett,chiusure){
+  let n=0;
+  const d=new Date(start.getFullYear(),start.getMonth(),start.getDate());
+  const last=new Date(end.getFullYear(),end.getMonth(),end.getDate());
+  while(d<=last){
+    if(isGiornoLavorativo(d,giorniSett)&&!isChiusura(d,chiusure))n++;
+    d.setDate(d.getDate()+1);
+  }
+  return n;
+}
+function derivaFrequenza(passaggiAnno,giorniSett){
+  const pa=parseInt(passaggiAnno);
+  if(!pa||pa<=0)return{label:'',regime:'none'};
+  const perSett=pa/52;
+  const perGiornoLav=pa/(giorniSett*52);
+  if(perSett>=0.75){
+    let label,periodo,target;
+    if(perGiornoLav>=1.8){label=Math.round(perGiornoLav)+'× al giorno';periodo='giorno';target=Math.round(perGiornoLav);}
+    else if(perGiornoLav>=0.8){label='Giornaliero';periodo='giorno';target=1;}
+    else{const n=Math.max(1,Math.round(perSett));label=n<=1?'Settimanale':n+'× a settimana';periodo='settimana';target=n;}
+    return{label:label,regime:'frequente',periodo:periodo,targetPeriodo:Math.max(1,target),perSettimana:perSett,perGiorno:perGiornoLav};
+  }
+  const gg=Math.round(365/pa);
+  let label;
+  if(gg<=18){label='Ogni '+Math.max(2,Math.round(gg/7))+' settimane';}
+  else{const mesi=Math.round(gg/30.4);const nomi={1:'Mensile',2:'Bimestrale',3:'Trimestrale',4:'Ogni 4 mesi',5:'Ogni 5 mesi',6:'Semestrale',12:'Annuale'};label=nomi[mesi]||('Ogni '+mesi+' mesi');}
+  return{label:label,regime:'scadenza',intervalloGiorni:gg};
+}
+function sogliaAvviso(gg){if(gg<=35)return 3;if(gg<=100)return 7;if(gg<=200)return 14;return 30;}
+function inizioSettimana(d){const x=new Date(d);const off=(x.getDay()+6)%7;x.setHours(0,0,0,0);x.setDate(x.getDate()-off);return x;}
+function ymdLocal(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function updateZmFreqLabel(){
+  const paEl=document.getElementById('zm-passaggi');
+  const el=document.getElementById('zm-freq-label');
+  if(!paEl||!el)return;
+  const pa=paEl.value;
+  const cl=document.getElementById('zm-client').value;
+  if(!pa||parseInt(pa)<=0){el.innerHTML='<span style="color:var(--muted);font-weight:400;">Vuoto = zona semplice (fatta / da fare)</span>';return;}
+  const gs=getGiorniSettimana(cl);
+  const fr=derivaFrequenza(pa,gs);
+  el.innerHTML='<i class="ti ti-rotate-clock"></i> '+fr.label+' <span style="color:var(--muted);font-weight:400;">· '+gs+' gg/sett · '+(fr.regime==='scadenza'?'in Scadenze':'nel cruscotto')+'</span>';
+}
+async function renderScadenze(rareZones){
+  const card=document.getElementById('dash-scadenze-card');
+  const box=document.getElementById('dash-scadenze');
+  if(!box)return;
+  if(!rareZones||!rareZones.length){if(card)card.style.display='none';box.innerHTML='';return;}
+  if(card)card.style.display='';
+  const ids=rareZones.map(z=>z.id);
+  const{data:rlogs}=await sb.from('logs').select('zone_id,created_at').eq('ok',true).in('zone_id',ids).order('created_at',{ascending:false}).limit(2000);
+  const last={};(rlogs||[]).forEach(l=>{if(!last[l.zone_id])last[l.zone_id]=l.created_at;});
+  const oggi=new Date();
+  const rows=rareZones.map(z=>{
+    const fr=z._fr||derivaFrequenza(z.passaggi_anno,getGiorniSettimana(z.client));
+    const ld=last[z.id]?new Date(last[z.id]):null;
+    const due=ld?new Date(ld.getTime()+fr.intervalloGiorni*86400000):null;
+    let stato,cls,ord;
+    if(!ld){stato='Mai eseguita';cls='badge-red';ord=0;}
+    else if(oggi>due){stato='Scaduta';cls='badge-red';ord=1;}
+    else{const gm=Math.ceil((due-oggi)/86400000);if(gm<=sogliaAvviso(fr.intervalloGiorni)){stato='Tra '+gm+' gg';cls='badge-amber';ord=2;}else{stato='In regola';cls='badge-green';ord=3;}}
+    return{z:z,fr:fr,ld:ld,due:due,stato:stato,cls:cls,ord:ord};
+  }).sort((a,b)=>a.ord-b.ord);
+  box.innerHTML=rows.map(r=>`
+    <div class="zone-item">
+      <div class="zdot ${r.cls==='badge-green'?'done':'missing'}"></div>
+      <div style="flex:1"><div style="font-size:14px;font-weight:600;">${r.z.name}</div>
+        <div style="font-size:12px;color:var(--muted);">${r.z.client} · ${r.fr.label}${r.ld?' · ultima '+fmtDate(r.ld):''}${r.due?' · prossima '+fmtDate(r.due):''}</div></div>
+      <span class="badge ${r.cls}">${r.stato}</span>
+    </div>`).join('');
+}
+async function renderCompliance(){
+  const box=document.getElementById('report-compliance');
+  if(!box)return;
+  const clientFilter=(document.getElementById('report-client-filter')||{}).value||'all';
+  const monthFilter=(document.getElementById('report-month-filter')||{}).value||'all';
+  const{data:zones}=await sb.from('zones').select('*').order('client').order('name');
+  let zs=(zones||[]).filter(z=>z.passaggi_anno&&z.passaggi_anno>0);
+  if(clientFilter!=='all')zs=zs.filter(z=>z.client===clientFilter);
+  if(currentUser&&currentUser.role==='visitatore'&&currentUser.vis_client&&currentUser.vis_client!=='all')zs=zs.filter(z=>z.client===currentUser.vis_client);
+  if(!zs.length){box.innerHTML='';return;}
+  const now=new Date();
+  const year=monthFilter!=='all'?parseInt(monthFilter.split('-')[0]):now.getFullYear();
+  const{data:ylogs}=await sb.from('logs').select('zone_id,created_at').eq('ok',true).gte('created_at',year+'-01-01').order('created_at',{ascending:false}).limit(5000);
+  const cntAnno={},cntMese={};
+  (ylogs||[]).forEach(l=>{
+    const d=new Date(l.created_at);
+    if(d.getFullYear()===year)cntAnno[l.zone_id]=(cntAnno[l.zone_id]||0)+1;
+    if(monthFilter!=='all'){const key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');if(key===monthFilter)cntMese[l.zone_id]=(cntMese[l.zone_id]||0)+1;}
+  });
+  const ggCache={};
+  function ggAnnoFor(client,gs){if(ggCache[client]==null)ggCache[client]=contaGiorniLavorativi(new Date(year,0,1),new Date(year,11,31),gs,getChiusure(client));return ggCache[client];}
+  const rows=zs.map(z=>{
+    const gs=getGiorniSettimana(z.client);
+    const chiusure=getChiusure(z.client);
+    const fr=derivaFrequenza(z.passaggi_anno,gs);
+    let attesi,fatti;
+    if(monthFilter!=='all'){
+      const mo=parseInt(monthFilter.split('-')[1]);
+      const primo=new Date(year,mo-1,1);
+      const ultimo=new Date(year,mo,0);
+      let fine;
+      if(year<now.getFullYear()||(year===now.getFullYear()&&mo-1<now.getMonth()))fine=ultimo;
+      else if(year===now.getFullYear()&&mo-1===now.getMonth())fine=now;
+      else fine=primo;
+      const ggTrasc=fine>=primo?contaGiorniLavorativi(primo,fine,gs,chiusure):0;
+      attesi=Math.round(z.passaggi_anno*ggTrasc/ggAnnoFor(z.client,gs));
+      fatti=cntMese[z.id]||0;
+    }else{
+      const fine=year<now.getFullYear()?new Date(year,11,31):now;
+      const ggTrasc=contaGiorniLavorativi(new Date(year,0,1),fine,gs,chiusure);
+      attesi=Math.round(z.passaggi_anno*ggTrasc/ggAnnoFor(z.client,gs));
+      fatti=cntAnno[z.id]||0;
+    }
+    const diff=fatti-attesi;
+    let cls,txt;
+    if(diff>=0){cls='badge-green';txt='in pari';}
+    else if(diff>=-Math.max(2,Math.round(attesi*0.1))){cls='badge-amber';txt=String(diff);}
+    else{cls='badge-red';txt=String(diff);}
+    return{z:z,fr:fr,attesi:attesi,fatti:fatti,diff:diff,cls:cls,txt:txt};
+  });
+  box.innerHTML=`<div class="dt-card" style="margin-bottom:1.25rem;">
+    <div class="dt-card-title"><i class="ti ti-target"></i> Rispetto capitolato ${monthFilter!=='all'?'· mese selezionato':'· anno '+year}</div>
+    ${rows.map(r=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+      <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;">${r.z.name}</div><div style="font-size:11px;color:var(--muted);">${r.z.client} · ${r.fr.label}</div></div>
+      <div style="text-align:right;"><div style="font-size:14px;font-weight:700;">${r.fatti}<span style="color:var(--muted);font-weight:400;font-size:12px;">/${r.attesi}</span></div><span class="badge ${r.cls}" style="font-size:10px;">${r.txt}</span></div>
+    </div>`).join('')}
+    <div style="font-size:11px;color:var(--muted);margin-top:8px;">Fatti / attesi a oggi · 🟢 in pari · 🟡 poco indietro · 🔴 indietro</div>
+  </div>`;
+}
 
 // ══ UTILITY ══
 function togglePass(id,btn){const i=document.getElementById(id);const s=i.type==='password';i.type=s?'text':'password';btn.innerHTML=s?'<i class="ti ti-eye-off"></i>':'<i class="ti ti-eye"></i>';}
@@ -940,14 +1192,18 @@ function refreshClientSelects(){
 function openClientModal(id){
   editClientId=id||null;
   document.getElementById('cm-title').textContent=id?'Modifica cliente':'Nuovo cliente';
-  if(id){const c=clientsList.find(x=>x.id===id);if(c)document.getElementById('cm-name').value=c.name;}
-  else document.getElementById('cm-name').value='';
+  if(id){const c=clientsList.find(x=>x.id===id);if(c){document.getElementById('cm-name').value=c.name;document.getElementById('cm-giorni').value=String(c.giorni_settimana||6);cmChiusure=parseChiusureVal(c.giorni_chiusura);}}
+  else{document.getElementById('cm-name').value='';document.getElementById('cm-giorni').value='6';cmChiusure=[];}
+  const da=document.getElementById('cm-chiusura-da');if(da)da.value='';const a=document.getElementById('cm-chiusura-a');if(a)a.value='';
+  cmRenderChiusure();
   openModal('client-modal');
 }
 async function saveClient(){
   const name=document.getElementById('cm-name').value.trim();if(!name)return;
-  if(editClientId)await sb.from('clients').update({name}).eq('id',editClientId);
-  else await sb.from('clients').insert({name});
+  const giorni=parseInt(document.getElementById('cm-giorni').value)||6;
+  const chiusure=cmChiusure;
+  if(editClientId)await sb.from('clients').update({name,giorni_settimana:giorni,giorni_chiusura:chiusure}).eq('id',editClientId);
+  else await sb.from('clients').insert({name,giorni_settimana:giorni,giorni_chiusura:chiusure});
   closeModal('client-modal');loadClients();showToast(editClientId?'Cliente aggiornato':'Cliente creato');
 }
 async function deleteClient(id,name){
@@ -1010,19 +1266,32 @@ async function loadDashboard(){
 function filterDash(v){dashFilter=v;loadDashboard();}
 
 // ══ ZONE ══
+let zoneFreqFilter='all';
 function filterZone(v){zoneFilter=v;loadZones();}
+function filterZoneFreq(v){zoneFreqFilter=v;loadZones();}
+function refreshFreqFilter(zones){
+  const sel=document.getElementById('zone-freq-filter');
+  if(!sel)return;
+  const labels=[...new Set(zones.map(z=>z._freqLabel))].sort((a,b)=>{if(a==='Non impostata')return 1;if(b==='Non impostata')return -1;return a.localeCompare(b);});
+  if(zoneFreqFilter!=='all'&&!labels.includes(zoneFreqFilter))zoneFreqFilter='all';
+  sel.innerHTML='<option value="all">— Tutte le frequenze —</option>'+labels.map(l=>`<option value="${l}">${l}</option>`).join('');
+  sel.value=zoneFreqFilter;
+}
 async function loadZones(){
   if(!clientsList.length)await loadClients();
   refreshClientSelects();
   let q=sb.from('zones').select('*').order('client').order('name');
   if(zoneFilter&&zoneFilter!=='all')q=q.eq('client',zoneFilter);
   const{data}=await q;
-  document.getElementById('zone-list').innerHTML=(data||[]).map(z=>`
+  const zonesAll=(data||[]).map(z=>{const fr=derivaFrequenza(z.passaggi_anno,getGiorniSettimana(z.client));z._freqLabel=fr.regime==='none'?'Non impostata':fr.label;return z;});
+  refreshFreqFilter(zonesAll);
+  const zonesShown=(zoneFreqFilter&&zoneFreqFilter!=='all')?zonesAll.filter(z=>z._freqLabel===zoneFreqFilter):zonesAll;
+  document.getElementById('zone-list').innerHTML=zonesShown.map(z=>`
     <div class="card" style="padding:.875rem 1rem;margin-bottom:8px;">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <div style="flex:1;min-width:120px;">
           <div style="font-size:14px;font-weight:600;">${z.name}</div>
-          <div style="font-size:12px;color:var(--muted);">${z.client} · ${z.floor} · ${z.type}</div>
+          <div style="font-size:12px;color:var(--muted);">${z.client} · ${z.floor} · ${z.type}${z.passaggi_anno?' · '+derivaFrequenza(z.passaggi_anno,getGiorniSettimana(z.client)).label+' ('+z.passaggi_anno+'/anno)':''}</div>
         </div>
         <div style="display:flex;gap:6px;">
           <button class="btn btn-sm" onclick="openQRModal('${z.id}')"><i class="ti ti-qrcode"></i></button>
@@ -1036,13 +1305,15 @@ async function openZoneModal(id){
   editZoneId=id||null;
   document.getElementById('zm-title').textContent=id?'Modifica zona':'Nuova zona';
   await loadClients();
-  if(id){const{data}=await sb.from('zones').select('*').eq('id',id).single();if(data){document.getElementById('zm-name').value=data.name;document.getElementById('zm-client').value=data.client;document.getElementById('zm-floor').value=data.floor;document.getElementById('zm-type').value=data.type;}}
-  else{document.getElementById('zm-name').value='';document.getElementById('zm-floor').value='Piano terra';document.getElementById('zm-type').value='Magazzino';}
+  if(id){const{data}=await sb.from('zones').select('*').eq('id',id).single();if(data){document.getElementById('zm-name').value=data.name;document.getElementById('zm-client').value=data.client;document.getElementById('zm-floor').value=data.floor;document.getElementById('zm-type').value=data.type;document.getElementById('zm-passaggi').value=data.passaggi_anno||'';}}
+  else{document.getElementById('zm-name').value='';document.getElementById('zm-floor').value='Piano terra';document.getElementById('zm-type').value='Magazzino';document.getElementById('zm-passaggi').value='';}
+  updateZmFreqLabel();
   openModal('zone-modal');
 }
 async function saveZone(){
   const name=document.getElementById('zm-name').value.trim();if(!name)return;
-  const obj={name,client:document.getElementById('zm-client').value,floor:document.getElementById('zm-floor').value,type:document.getElementById('zm-type').value};
+  const paRaw=document.getElementById('zm-passaggi').value;
+  const obj={name,client:document.getElementById('zm-client').value,floor:document.getElementById('zm-floor').value,type:document.getElementById('zm-type').value,passaggi_anno:paRaw&&parseInt(paRaw)>0?parseInt(paRaw):null};
   if(editZoneId)await sb.from('zones').update(obj).eq('id',editZoneId);
   else await sb.from('zones').insert(obj);
   closeModal('zone-modal');loadZones();showToast(editZoneId?'Zona aggiornata':'Zona creata');
@@ -1112,6 +1383,7 @@ async function loadReportGiornalieri(){
 }
 
 function renderReportGiornalieri(){
+  renderCompliance();
   const clientFilter=document.getElementById('report-client-filter')?.value||'all';
   const monthFilter=document.getElementById('report-month-filter')?.value||'all';
   // Group logs by date — filter by month if selected
@@ -1130,6 +1402,21 @@ function renderReportGiornalieri(){
   sb.from('zones').select('*').order('client').order('name').then(({data:zones})=>{
     const allZones=zones||[];
     const filteredZones=clientFilter==='all'?allZones:allZones.filter(z=>z.client===clientFilter);
+    if(monthFilter!=='all'){
+      const _mp=monthFilter.split('-');const _yy=parseInt(_mp[0]);const _mm=parseInt(_mp[1]);
+      const _now=new Date();
+      const _lastDay=new Date(_yy,_mm,0).getDate();
+      let _upTo;
+      if(_yy<_now.getFullYear()||(_yy===_now.getFullYear()&&_mm-1<_now.getMonth()))_upTo=_lastDay;
+      else if(_yy===_now.getFullYear()&&_mm-1===_now.getMonth())_upTo=_now.getDate();
+      else _upTo=0;
+      for(let _d=1;_d<=_upTo;_d++){
+        const _do=new Date(_yy,_mm-1,_d);
+        if(!filteredZones.some(z=>isServiceDay(z.client,_do)))continue;
+        const _ds=_do.toLocaleDateString('it-IT');
+        if(!byDay[_ds])byDay[_ds]=[];
+      }
+    }
     const days=Object.keys(byDay).sort((a,b)=>{
       const da=new Date(a.split('/').reverse().join('-'));
       const db=new Date(b.split('/').reverse().join('-'));
@@ -1139,9 +1426,10 @@ function renderReportGiornalieri(){
     document.getElementById('report-list').innerHTML=days.map((day,idx)=>{
       const dayLogs=byDay[day];
       const doneIds=new Set(dayLogs.filter(l=>l.ok).map(l=>l.zone_id));
-      const completate=filteredZones.filter(z=>doneIds.has(z.id));
-      const mancanti=filteredZones.filter(z=>!doneIds.has(z.id));
-      const tot=filteredZones.length;
+      const _expected=monthFilter==='all'?filteredZones:filteredZones.filter(z=>isServiceDay(z.client,parseItDate(day))||doneIds.has(z.id));
+      const completate=_expected.filter(z=>doneIds.has(z.id));
+      const mancanti=_expected.filter(z=>!doneIds.has(z.id));
+      const tot=_expected.length;
       const pct=tot>0?Math.round(completate.length/tot*100):0;
       const barColor=pct===100?'var(--success)':pct>=70?'#1a5c3a':'var(--warning)';
       return `<div class="card" style="margin-bottom:8px;overflow:hidden;">
@@ -1462,7 +1750,11 @@ async function loadStorico(){
     </div>`).join('')||'<div style="text-align:center;padding:1rem;color:var(--muted);">Nessuna attività.</div>';
 }
 async function deleteLog(id,photoUrl){
+  if(currentUser&&currentUser.role!=='admin'){showToast('Solo l\'amministratore può eliminare',false);return;}
   if(!confirm('Eliminare questa registrazione?'))return;
+  const{data:l}=await sb.from('logs').select('*,users(name)').eq('id',id).single();
+  if(l){const dett='Eliminata: '+(l.zone_name||'—')+' · '+fmtDate(l.created_at)+' '+fmt(l.created_at)+' · '+(l.users&&l.users.name?l.users.name:'—')+' · '+(l.ok?'Eseguita':'Non eseguita');
+    await sb.from('log_modifiche').insert({log_id:id,admin_id:currentUser.id,admin_name:currentUser.name,azione:'eliminazione',dettaglio:dett});}
   if(photoUrl){const path=photoUrl.split('/foto-pulizie/')[1];if(path)await sb.storage.from('foto-pulizie').remove([decodeURIComponent(path)]);}
   await sb.from('logs').delete().eq('id',id);
   loadStorico();showToast('Eliminato');
@@ -1474,6 +1766,61 @@ async function doAzzera(){
   await sb.from('orders').delete().neq('id','00000000-0000-0000-0000-000000000000');
   await sb.from('messages').delete().neq('id','00000000-0000-0000-0000-000000000000');
   loadStorico();showToast('Storico, ordini, foto e messaggi azzerati');
+}
+
+// ══ STORICO: MODIFICA + TRACCIA (admin) ══
+let editLogId=null,editLogOrig=null;
+function isServiceDay(client,dateObj){const gs=getGiorniSettimana(client);return isGiornoLavorativo(dateObj,gs)&&!isChiusura(dateObj,getChiusure(client));}
+function parseItDate(s){const p=s.split('/');return new Date(parseInt(p[2]),parseInt(p[1])-1,parseInt(p[0]));}
+async function openLogEdit(id){
+  if(!currentUser||currentUser.role!=='admin'){showToast('Solo l\'amministratore',false);return;}
+  const{data:l}=await sb.from('logs').select('*,users(name)').eq('id',id).single();
+  if(!l){showToast('Scansione non trovata',false);return;}
+  editLogId=id;editLogOrig=l;
+  document.getElementById('le-stato').value=l.ok?'1':'0';
+  const d=new Date(l.created_at);
+  document.getElementById('le-data').value=ymdLocal(d);
+  document.getElementById('le-ora').value=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  const{data:users}=await sb.from('users').select('id,name').eq('role','operatore').order('name');
+  let opts=users||[];
+  if(l.user_id&&!opts.some(u=>u.id===l.user_id)){const{data:cur}=await sb.from('users').select('id,name').eq('id',l.user_id).single();if(cur)opts=[cur].concat(opts);}
+  const sel=document.getElementById('le-operatore');
+  sel.innerHTML=opts.map(u=>'<option value="'+u.id+'">'+u.name+'</option>').join('');
+  if(l.user_id)sel.value=l.user_id;
+  document.getElementById('le-info').textContent=(l.zone_name||'—')+(l.client?' · '+l.client:'');
+  openModal('log-edit-modal');
+}
+async function saveLogEdit(){
+  if(!editLogId||!editLogOrig)return;
+  const l=editLogOrig;
+  const newOk=document.getElementById('le-stato').value==='1';
+  const dataV=document.getElementById('le-data').value;
+  const oraV=document.getElementById('le-ora').value||'00:00';
+  if(!dataV){showToast('Inserisci la data',false);return;}
+  const sel=document.getElementById('le-operatore');
+  const newUserId=sel.value;
+  const newUserName=sel.options[sel.selectedIndex]?sel.options[sel.selectedIndex].text:'';
+  const dp=dataV.split('-'),tp=oraV.split(':');
+  const newDate=new Date(parseInt(dp[0]),parseInt(dp[1])-1,parseInt(dp[2]),parseInt(tp[0]),parseInt(tp[1]));
+  const newIso=newDate.toISOString();
+  const changes=[];
+  if(l.ok!==newOk)changes.push('Stato: '+(l.ok?'Eseguita':'Non eseguita')+' → '+(newOk?'Eseguita':'Non eseguita'));
+  if(Math.abs(new Date(l.created_at).getTime()-newDate.getTime())>60000)changes.push('Data/ora: '+fmtDate(l.created_at)+' '+fmt(l.created_at)+' → '+fmtDate(newIso)+' '+fmt(newIso));
+  if((l.user_id||'')!==(newUserId||''))changes.push('Operatore: '+(l.users&&l.users.name?l.users.name:'—')+' → '+(newUserName||'—'));
+  if(!changes.length){closeModal('log-edit-modal');showToast('Nessuna modifica');return;}
+  await sb.from('logs').update({ok:newOk,created_at:newIso,user_id:newUserId}).eq('id',editLogId);
+  await sb.from('log_modifiche').insert({log_id:editLogId,admin_id:currentUser.id,admin_name:currentUser.name,azione:'modifica',dettaglio:changes.join('; ')});
+  closeModal('log-edit-modal');
+  loadStorico();
+  showToast('Scansione aggiornata');
+}
+async function openAuditLog(logId){
+  let q=sb.from('log_modifiche').select('*').order('created_at',{ascending:false}).limit(500);
+  if(logId)q=q.eq('log_id',logId);
+  const{data}=await q;
+  document.getElementById('la-title').textContent=logId?'Modifiche di questa scansione':'Registro modifiche';
+  document.getElementById('la-body').innerHTML=((data||[]).length)?(data||[]).map(m=>'<div style="padding:9px 0;border-bottom:1px solid var(--border);"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><span style="font-size:13px;font-weight:600;">'+(m.azione==='eliminazione'?'🗑 Eliminazione':'✎ Modifica')+'</span><span style="color:var(--muted);font-size:11px;">'+fmtDate(m.created_at)+' '+fmt(m.created_at)+'</span></div><div style="font-size:11px;color:var(--muted);margin-top:1px;">'+(m.admin_name||'—')+'</div><div style="font-size:13px;margin-top:3px;">'+(m.dettaglio||'')+'</div></div>').join(''):'<div style="text-align:center;color:var(--muted);padding:1rem;">Nessuna modifica registrata.</div>';
+  openModal('log-audit-modal');
 }
 
 // ══ PRODOTTI ══
@@ -2206,19 +2553,25 @@ function setupNav() {
 // Override loadStorico to use table format
 const _origLoadStorico = window.loadStorico;
 async function loadStorico() {
-  const {data} = await sb.from('logs').select('*,users(name),zones(client)').order('created_at', {ascending: false}).limit(300);
+  const [{data},{data:mods}] = await Promise.all([
+    sb.from('logs').select('*,users(name),zones(client)').order('created_at', {ascending: false}).limit(300),
+    sb.from('log_modifiche').select('log_id').eq('azione','modifica')
+  ]);
+  const modSet=new Set((mods||[]).map(m=>m.log_id));
+  const isAdmin=currentUser.role==='admin';
+  const rm=document.getElementById('btn-registro-mod');if(rm)rm.style.display=isAdmin?'':'none';
   const tbody = document.getElementById('storico-list');
   if (!tbody) return;
   tbody.innerHTML = (data || []).map(l => `
     <tr>
       <td>${fmtDate(l.created_at)}</td>
       <td>${fmt(l.created_at)}</td>
-      <td style="font-weight:500;">${l.zone_name || '—'}</td>
+      <td style="font-weight:500;">${l.zone_name || '—'}${modSet.has(l.id)?` <span onclick="openAuditLog('${l.id}')" style="color:var(--accent-bright);cursor:pointer;" title="Vedi modifiche">✎</span>`:''}</td>
       <td style="color:var(--muted);">${l.client || l.zones?.client || '—'}</td>
       <td>${l.users?.name || '—'}</td>
       <td><span class="chip ${l.ok ? 'chip-green' : 'chip-amber'}" style="font-size:10px;">${l.ok ? '✓ Eseguita' : '✗ Non eseg.'}</span></td>
       <td>${l.photo_url ? `<a href="${l.photo_url}" target="_blank" class="btn btn-sm" style="padding:2px 8px;"><i class="ti ti-eye"></i></a>` : '—'}</td>
-      <td>${currentUser.role === 'admin' ? `<button class="btn btn-sm btn-danger" onclick="deleteLog('${l.id}','${l.photo_url || ''}')" style="padding:2px 8px;"><i class="ti ti-trash"></i></button>` : ''}</td>
+      <td>${isAdmin ? `<button class="btn btn-sm" onclick="openLogEdit('${l.id}')" style="padding:2px 8px;" title="Modifica"><i class="ti ti-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="deleteLog('${l.id}','${l.photo_url || ''}')" style="padding:2px 8px;"><i class="ti ti-trash"></i></button>` : ''}</td>
     </tr>`).join('') || '<tr><td colspan="8" style="text-align:center;padding:1rem;color:var(--muted);">Nessuna attività.</td></tr>';
 }
 
@@ -2227,42 +2580,69 @@ const _origLoadDashboard = window.loadDashboard;
 async function loadDashboard() {
   if (!clientsList.length) await loadClients();
   const nowLocal = new Date();
-  const today = nowLocal.getFullYear() + '-' + String(nowLocal.getMonth()+1).padStart(2,'0') + '-' + String(nowLocal.getDate()).padStart(2,'0');
+  const today = ymdLocal(nowLocal);
+  const weekStart = ymdLocal(inizioSettimana(nowLocal));
   const isVis = currentUser.role === 'visitatore';
   const visClient = isVis && currentUser.vis_client && currentUser.vis_client !== 'all' ? currentUser.vis_client : null;
-  const [{data:zones},{data:logs},{data:orders}] = await Promise.all([
+  const [{data:zones},{data:logs},{data:orders},{data:recentLogs}] = await Promise.all([
     sb.from('zones').select('*').order('client').order('name'),
-    sb.from('logs').select('*,users(name)').gte('created_at', today).order('created_at', {ascending:false}).limit(100),
-    sb.from('orders').select('id').eq('evaso', false)
+    sb.from('logs').select('*,users(name)').gte('created_at', weekStart).order('created_at', {ascending:false}).limit(800),
+    sb.from('orders').select('id').eq('evaso', false),
+    sb.from('logs').select('*,users(name)').order('created_at', {ascending:false}).limit(5)
   ]);
-  const done = new Set((logs||[]).filter(l=>l.ok).map(l=>l.zone_id));
-  const f = visClient ? (zones||[]).filter(z=>z.client===visClient) : dashFilter==='all' ? (zones||[]) : (zones||[]).filter(z=>z.client===dashFilter);
-  document.getElementById('s-total').textContent = f.length;
-  document.getElementById('s-done').textContent = f.filter(z=>done.has(z.id)).length;
-  document.getElementById('s-miss').textContent = f.filter(z=>!done.has(z.id)).length;
+  const allZones = zones||[];
+  const f = visClient ? allZones.filter(z=>z.client===visClient) : dashFilter==='all' ? allZones : allZones.filter(z=>z.client===dashFilter);
+  // Conteggio passaggi: oggi e questa settimana
+  const cntToday={},cntWeek={};
+  (logs||[]).filter(l=>l.ok).forEach(l=>{
+    cntWeek[l.zone_id]=(cntWeek[l.zone_id]||0)+1;
+    if(ymdLocal(new Date(l.created_at))===today)cntToday[l.zone_id]=(cntToday[l.zone_id]||0)+1;
+  });
+  f.forEach(z=>z._fr=derivaFrequenza(z.passaggi_anno,getGiorniSettimana(z.client)));
+  const freqZones=f.filter(z=>z._fr.regime!=='scadenza');
+  const rareZones=f.filter(z=>z._fr.regime==='scadenza');
+  function statoZona(z){
+    const fr=z._fr;
+    if(fr.regime==='frequente'){
+      if(fr.periodo==='giorno'&&isChiusura(nowLocal,getChiusure(z.client)))return{chiuso:true,fatti:0,target:fr.targetPeriodo,done:false,periodo:'giorno',label:fr.label};
+      const fatti=fr.periodo==='giorno'?(cntToday[z.id]||0):(cntWeek[z.id]||0);
+      return{fatti:fatti,target:fr.targetPeriodo,done:fatti>=fr.targetPeriodo,periodo:fr.periodo,label:fr.label};
+    }
+    const fatti=cntToday[z.id]||0;
+    return{fatti:fatti,target:1,done:fatti>=1,periodo:'giorno',label:''};
+  }
+  const stati=freqZones.map(z=>({z:z,s:statoZona(z)}));
+  const chiusiN=stati.filter(x=>x.s.chiuso).length;
+  const totaleN=freqZones.length-chiusiN;
+  const doneN=stati.filter(x=>x.s.done).length;
+  document.getElementById('s-total').textContent = totaleN;
+  document.getElementById('s-done').textContent = doneN;
+  document.getElementById('s-miss').textContent = totaleN - doneN;
   document.getElementById('s-orders').textContent = (orders||[]).length;
   // Zones list
   const zonesEl = document.getElementById('dt-zones');
-  if (zonesEl) zonesEl.innerHTML = f.slice(0,20).map(z => `
+  if (zonesEl) zonesEl.innerHTML = stati.slice(0,30).map(({z,s}) => `
     <div class="dt-zone-row">
-      <div class="zdot ${done.has(z.id)?'done':'miss'}"></div>
-      <div style="flex:1;"><div style="font-size:13px;font-weight:500;">${z.name}</div><div style="font-size:11px;color:var(--muted);">${z.client} · ${z.floor}</div></div>
-      <span class="chip ${done.has(z.id)?'chip-green':'chip-red'}">${done.has(z.id)?'✓ OK':'Da fare'}</span>
+      <div class="zdot ${s.chiuso?'':(s.done?'done':'miss')}"${s.chiuso?' style="background:var(--warning);"':''}></div>
+      <div style="flex:1;"><div style="font-size:13px;font-weight:500;">${z.name}</div><div style="font-size:11px;color:var(--muted);">${z.client} · ${z.floor}${s.label?' · '+s.label:''}</div></div>
+      <span class="chip ${s.chiuso?'chip-amber':(s.done?'chip-green':'chip-red')}">${s.chiuso?'Chiuso oggi':(s.label===''?(s.done?'✓ OK':'Da fare'):(s.done?'✓ '+s.fatti+'/'+s.target:s.fatti+'/'+s.target+(s.periodo==='settimana'?' sett.':'')))}</span>
     </div>`).join('') || '<div style="text-align:center;padding:1rem;color:var(--muted);">Nessuna zona.</div>';
   // Logs — old element (kept for compatibility)
   const logsEl = document.getElementById('dt-logs');
   if (logsEl) logsEl.innerHTML = '';
-  // Ultime scansioni nel nuovo pannello
+  // Ultime scansioni (ultime 5, indipendentemente dal giorno)
   const scansEl = document.getElementById('dt-scans');
-  if (scansEl) scansEl.innerHTML = (logs||[]).slice(0,15).map(l => `
+  if (scansEl) scansEl.innerHTML = (recentLogs||[]).slice(0,5).map(l => `
     <div class="scan-row">
       <div class="zdot ${l.ok?'done':'miss'}" style="flex-shrink:0;"></div>
-      <span class="log-time" style="min-width:38px;font-family:monospace;font-size:11px;color:var(--muted);">${fmt(l.created_at)}</span>
+      <span class="log-time" style="min-width:74px;font-family:monospace;font-size:11px;color:var(--muted);">${fmtDate(l.created_at).slice(0,5)} ${fmt(l.created_at)}</span>
       <span style="flex:1;font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${l.zone_name||'—'}</span>
       <span style="font-size:11px;color:var(--muted);white-space:nowrap;">${l.users?.name?.split(' ')[0]||'—'}</span>
       <span class="chip ${l.ok?'chip-green':'chip-amber'}" style="font-size:10px;flex-shrink:0;">${l.ok?'✓':'✗'}</span>
       ${l.photo_url?'<span style="font-size:11px;">📸</span>':''}
-    </div>`).join('') || '<div style="font-size:13px;color:var(--muted);padding:.5rem 0;">Nessuna attività oggi.</div>';
+    </div>`).join('') || '<div style="font-size:13px;color:var(--muted);padding:.5rem 0;">Nessuna scansione.</div>';
+  // Scadenze (zone rare)
+  await renderScadenze(rareZones);
   // Mini mappa dashboard
   loadDashboardMiniMap();
   // Visitatore UI
@@ -2705,6 +3085,43 @@ function resizeImage(file, maxWidth) {
 }
 
 // ── MINI MAPPA DASHBOARD ──
+let mapDashMode='oggi';
+function setMapDashMode(m){
+  mapDashMode=m;
+  const bo=document.getElementById('mapmode-oggi'),ba=document.getElementById('mapmode-anno');
+  if(bo)bo.className='btn btn-sm'+(m==='oggi'?' btn-primary':'');
+  if(ba)ba.className='btn btn-sm'+(m==='anno'?' btn-primary':'');
+  const t=document.getElementById('dash-map-title');if(t)t.textContent=m==='anno'?'Mappa anno':'Mappa oggi';
+  const lg=document.getElementById('dash-map-legend');
+  if(lg)lg.innerHTML=(m==='anno')
+    ?'<span style="display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:50%;background:#3FB950;display:inline-block;"></span>In pari</span><span style="display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:50%;background:#E3B341;display:inline-block;"></span>Poco indietro</span><span style="display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:50%;background:#F85149;display:inline-block;"></span>Indietro</span>'
+    :'<span style="display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:50%;background:#3FB950;display:inline-block;"></span>Fatta</span><span style="display:flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;border-radius:50%;background:#F85149;display:inline-block;"></span>Da fare</span>';
+  loadDashboardMiniMap();
+}
+function annoColorZona(z,cntAnno,lastDone,now,year){
+  const gs=getGiorniSettimana(z.client);
+  const fr=derivaFrequenza(z.passaggi_anno,gs);
+  if(fr.regime==='none')return{fill:'#8B949E',border:'#555',label:'non impostata'};
+  if(fr.regime==='frequente'){
+    const chiusure=getChiusure(z.client);
+    const ggAnno=contaGiorniLavorativi(new Date(year,0,1),new Date(year,11,31),gs,chiusure);
+    const fine=year<now.getFullYear()?new Date(year,11,31):now;
+    const ggTrasc=contaGiorniLavorativi(new Date(year,0,1),fine,gs,chiusure);
+    const attesi=ggAnno>0?Math.round(z.passaggi_anno*ggTrasc/ggAnno):0;
+    const fatti=cntAnno[z.id]||0;
+    const diff=fatti-attesi;
+    if(diff>=0)return{fill:'#3FB950',border:'#155724',label:'in pari '+fatti+'/'+attesi};
+    if(diff>=-Math.max(2,Math.round(attesi*0.1)))return{fill:'#E3B341',border:'#9A6700',label:'poco indietro '+fatti+'/'+attesi};
+    return{fill:'#F85149',border:'#5A0000',label:'indietro '+fatti+'/'+attesi};
+  }
+  const ld=lastDone[z.id]?new Date(lastDone[z.id]):null;
+  const due=ld?new Date(ld.getTime()+fr.intervalloGiorni*86400000):null;
+  if(!ld)return{fill:'#F85149',border:'#5A0000',label:'mai eseguita'};
+  if(now>due)return{fill:'#F85149',border:'#5A0000',label:'scaduta'};
+  const gm=Math.ceil((due-now)/86400000);
+  if(gm<=sogliaAvviso(fr.intervalloGiorni))return{fill:'#E3B341',border:'#9A6700',label:'tra '+gm+' gg'};
+  return{fill:'#3FB950',border:'#155724',label:'in regola'};
+}
 async function loadDashboardMiniMap() {
   const container = document.getElementById('dash-mini-map');
   const placeholder = document.getElementById('dash-map-placeholder');
@@ -2727,6 +3144,13 @@ async function loadDashboardMiniMap() {
   const today = nowLocal.getFullYear() + '-' + String(nowLocal.getMonth()+1).padStart(2,'0') + '-' + String(nowLocal.getDate()).padStart(2,'0');
   const {data: logs} = await sb.from('logs').select('zone_id').eq('ok', true).gte('created_at', today);
   const done = new Set((logs || []).map(l => l.zone_id));
+  // Modalità ANNO: dati di conformità annuale
+  const annoYear=nowLocal.getFullYear();
+  const cntAnno={},lastDone={};
+  if(mapDashMode==='anno'){
+    const{data:ylogs}=await sb.from('logs').select('zone_id,created_at').eq('ok',true).gte('created_at',annoYear+'-01-01').order('created_at',{ascending:false}).limit(5000);
+    (ylogs||[]).forEach(l=>{cntAnno[l.zone_id]=(cntAnno[l.zone_id]||0)+1;if(!lastDone[l.zone_id])lastDone[l.zone_id]=l.created_at;});
+  }
   if (!mapZones.length) {
     const {data: zones} = await sb.from('zones').select('*');
     mapZones = zones || [];
@@ -2735,31 +3159,42 @@ async function loadDashboardMiniMap() {
   let pinned = mapZones.filter(z => z.map_x != null && z.map_y != null);
   if (clientFilter !== 'all') pinned = pinned.filter(z => z.client === clientFilter);
   // Remove existing pins and image
-  container.querySelectorAll('.map-pin,.map-img').forEach(p => p.remove());
-  // Add image
+  container.querySelectorAll('.map-pin,.map-img,.map-wrap').forEach(p => p.remove());
+  // Immagine dentro un wrapper della SUA stessa dimensione: i pin si allineano all'immagine, non al contenitore
+  const wrap = document.createElement('div');
+  wrap.className = 'map-wrap';
+  wrap.style.cssText = 'position:relative;width:100%;line-height:0;';
   const img = document.createElement('img');
   img.className = 'map-img';
   img.src = setting.value;
   img.style.cssText = 'width:100%;height:auto;display:block;';
-  if (placeholder) container.insertBefore(img, placeholder);
-  else container.appendChild(img);
+  wrap.appendChild(img);
+  if (placeholder) container.insertBefore(wrap, placeholder);
+  else container.appendChild(wrap);
   // Add mini pins — stile scelto dall'utente (pallini o bandierine)
   // Carica stile se non ancora caricato
   if (!dashPinStyle || dashPinStyle === 'dot') {
     try { const {data:ps} = await sb.from('settings').select('value').eq('id','dash_pin_style').single(); if(ps?.value) dashPinStyle=ps.value; } catch(e){}
   }
   pinned.forEach(z => {
-    const isDone = done.has(z.id);
+    let fill,border,ttl;
+    if(mapDashMode==='anno'){
+      const col=annoColorZona(z,cntAnno,lastDone,nowLocal,annoYear);
+      fill=col.fill;border=col.border;ttl=z.name+' — '+col.label;
+    }else{
+      const isDone=done.has(z.id);
+      fill=isDone?'#3FB950':'#F85149';border=isDone?'#155724':'#5A0000';ttl=z.name+(isDone?' ✓':' ✗');
+    }
     const pin = document.createElement('div');
     pin.className = 'map-pin';
     if (dashPinStyle === 'flag') {
       pin.style.cssText = `position:absolute;left:${z.map_x}%;top:${z.map_y}%;transform:translate(-50%,-100%);cursor:default;z-index:5;font-size:16px;line-height:1;`;
-      pin.innerHTML = `<span style="display:inline-flex;flex-direction:column;align-items:center;"><span style="width:12px;height:14px;background:${isDone?'#3FB950':'#F85149'};clip-path:polygon(0 0,100% 25%,0 50%);display:block;"></span><span style="width:2px;height:10px;background:#555;display:block;margin-left:0;"></span></span>`;
+      pin.innerHTML = `<span style="display:inline-flex;flex-direction:column;align-items:center;"><span style="width:12px;height:14px;background:${fill};clip-path:polygon(0 0,100% 25%,0 50%);display:block;"></span><span style="width:2px;height:10px;background:#555;display:block;margin-left:0;"></span></span>`;
     } else {
-      pin.style.cssText = `position:absolute;left:${z.map_x}%;top:${z.map_y}%;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:50%;background:${isDone ? '#3FB950' : '#F85149'};border:1.5px solid ${isDone ? '#155724' : '#5A0000'};cursor:default;z-index:5;`;
+      pin.style.cssText = `position:absolute;left:${z.map_x}%;top:${z.map_y}%;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:50%;background:${fill};border:1.5px solid ${border};cursor:default;z-index:5;`;
     }
-    pin.title = z.name + (isDone ? ' ✓' : ' ✗');
-    container.appendChild(pin);
+    pin.title = ttl;
+    wrap.appendChild(pin);
   });
 }
 </script>
