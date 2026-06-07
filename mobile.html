@@ -180,7 +180,7 @@ body{font-family:'Helvetica Neue',Arial,sans-serif;background:var(--bg);color:va
   .page{padding-bottom:1rem;}
   .toast{bottom:20px;}
   .nav{gap:6px;}
-  .nav-tabs{display:flex;gap:2px;margin-left:auto;}
+  #nav-tabs{display:flex!important;gap:2px;margin-left:auto;}
   .nav-tab{padding:8px 12px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;cursor:pointer;border:none;color:var(--muted);background:transparent;display:flex;align-items:center;gap:4px;min-height:40px;}
   .nav-tab.active{background:var(--accent-light);color:var(--accent);}
   .nav-tab:hover:not(.active){background:var(--bg);}
@@ -697,6 +697,15 @@ textarea.form-input{resize:none;}
     </div>
   </div>
 </div>
+<div class="modal-overlay" id="more-menu-modal">
+  <div class="modal">
+    <div class="modal-title">Altro</div>
+    <button class="btn btn-block" style="justify-content:flex-start;margin-bottom:8px;" onclick="moreGo('zone')"><i class="ti ti-qrcode"></i> Zone & QR</button>
+    <button class="btn btn-block" style="justify-content:flex-start;margin-bottom:8px;" onclick="moreGo('clienti')"><i class="ti ti-building"></i> Clienti</button>
+    <button class="btn btn-block" style="justify-content:flex-start;margin-bottom:8px;" onclick="moreGo('utenti')"><i class="ti ti-users"></i> Utenti</button>
+    <button class="btn btn-block" onclick="closeModal('more-menu-modal')">Chiudi</button>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1079,9 +1088,8 @@ function setupNav(){
       {p:'messaggi',icon:'ti-message-circle',label:'Chat'},
       {p:'operatore',icon:'ti-scan',label:'Scan'},
     ];
-    bottomNav.innerHTML=mobileTabs.map(t=>`<button class="bottom-tab" onclick="showPage('${t.p}')" id="btab-${t.p}"><i class="ti ${t.icon}"></i>${t.p==='ordini-admin'?'<span class="notif-badge" id="notif-mobile"></span>':''}${t.p==='messaggi'?'<span class="notif-badge" id="msg-notif-mobile"></span>':''}<span>${t.label}</span></button>`).join('');
+    bottomNav.innerHTML=mobileTabs.map(t=>`<button class="bottom-tab" onclick="showPage('${t.p}')" id="btab-${t.p}"><i class="ti ${t.icon}"></i>${t.p==='ordini-admin'?'<span class="notif-badge" id="notif-mobile"></span>':''}${t.p==='messaggi'?'<span class="notif-badge" id="msg-notif-mobile"></span>':''}<span>${t.label}</span></button>`).join('')+`<button class="bottom-tab" onclick="openMobileMenu()"><i class="ti ti-dots"></i><span>Altro</span></button>`;
     // Desktop top nav
-    navTabs.style.display='flex';
     navTabs.innerHTML=tabs.map(t=>`<button class="nav-tab" onclick="showPage('${t.p}')" id="ntab-${t.p}"><i class="ti ${t.icon}"></i> <span>${t.label}</span>${t.p==='ordini-admin'?'<span class="nav-notif" id="notif-desktop"></span>':''}${t.p==='messaggi'?'<span class="nav-notif" id="msg-notif-desktop"></span>':''}</button>`).join('');
     // Aggiungi anche scansione e utenti al bottom nav come overflow
     document.getElementById('op-header').textContent='Scansione (Admin)';
@@ -1093,7 +1101,6 @@ function setupNav(){
       {p:'messaggi',icon:'ti-message-circle',label:'Chat'},
     ];
     bottomNav.innerHTML=tabs.map(t=>`<button class="bottom-tab" onclick="showPage('${t.p}')" id="btab-${t.p}" style="flex:1;"><i class="ti ${t.icon}"></i>${t.p==='messaggi'?'<span class="notif-badge" id="msg-notif-mobile"></span>':''}<span>${t.label}</span></button>`).join('');
-    navTabs.style.display='flex';
     navTabs.innerHTML=tabs.map(t=>`<button class="nav-tab" onclick="showPage('${t.p}')" id="ntab-${t.p}"><i class="ti ${t.icon}"></i> <span>${t.label}</span>${t.p==='messaggi'?'<span class="nav-notif" id="msg-notif-desktop"></span>':''}</button>`).join('');
   }else{
     badge.className='badge badge-accent';badge.textContent='Operatore';
@@ -1103,11 +1110,12 @@ function setupNav(){
       {p:'messaggi',icon:'ti-message-circle',label:'Chat'},
     ];
     bottomNav.innerHTML=tabs.map(t=>`<button class="bottom-tab" onclick="showPage('${t.p}')" id="btab-${t.p}" style="flex:1;"><i class="ti ${t.icon}"></i>${t.p==='messaggi'?'<span class="notif-badge" id="msg-notif-mobile"></span>':''}<span>${t.label}</span></button>`).join('');
-    navTabs.style.display='flex';
     navTabs.innerHTML=tabs.map(t=>`<button class="nav-tab" onclick="showPage('${t.p}')" id="ntab-${t.p}"><i class="ti ${t.icon}"></i> <span>${t.label}</span>${t.p==='messaggi'?'<span class="nav-notif" id="msg-notif-desktop"></span>':''}</button>`).join('');
     document.getElementById('op-header').textContent='Ciao, '+currentUser.name.split(' ')[0]+'!';
   }
 }
+function openMobileMenu(){openModal('more-menu-modal');}
+function moreGo(p){closeModal('more-menu-modal');showPage(p);}
 function showPage(p){
   stopScanner();
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
