@@ -279,6 +279,7 @@ textarea.form-input{resize:none;}
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <select class="form-input" style="width:auto;font-size:13px;" onchange="filterZone(this.value)" id="zone-client-filter"></select>
         <select class="form-input" style="width:auto;font-size:13px;" onchange="filterZoneFreq(this.value)" id="zone-freq-filter"><option value="all">— Tutte le frequenze —</option></select>
+        <button class="btn btn-sm" onclick="printAllQR()"><i class="ti ti-printer"></i> Stampa QR</button>
         <button class="btn btn-primary btn-sm" onclick="openZoneModal(null)"><i class="ti ti-plus"></i> Nuova</button>
       </div>
     </div>
@@ -2162,6 +2163,50 @@ function shareQR(){
   const{name}=currentQRData;
   setTimeout(()=>{const c=document.querySelector('#qr-box canvas');if(!c)return;c.toBlob(blob=>{const file=new File([blob],`QR_${name.replace(/\s/g,'_')}.png`,{type:'image/png'});if(navigator.share)navigator.share({title:'QR — '+name,files:[file]});else{const a=document.createElement('a');a.href=c.toDataURL();a.download=`QR_${name.replace(/\s/g,'_')}.png`;a.click();}});},200);
 }
+
+// ══ STAMPA TUTTI I QR ══
+async function printAllQR(){
+  let q=sb.from('zones').select('*').order('client').order('name');
+  if(zoneFilter&&zoneFilter!=='all')q=q.eq('client',zoneFilter);
+  const{data}=await q;
+  let zones=data||[];
+  if(zoneFreqFilter&&zoneFreqFilter!=='all'){
+    zones=zones.filter(z=>{const fr=derivaFrequenza(z.passaggi_anno,getGiorniSettimana(z.client));const lbl=fr.regime==='none'?'Non impostata':fr.label;return lbl===zoneFreqFilter;});
+  }
+  if(!zones.length){showToast('Nessuna zona da stampare',false);return;}
+  showToast('Preparo '+zones.length+' QR...');
+  const tmp=document.createElement('div');tmp.style.cssText='position:absolute;left:-9999px;top:0;';document.body.appendChild(tmp);
+  const items=[];
+  zones.forEach(z=>{
+    const box=document.createElement('div');tmp.appendChild(box);
+    new QRCode(box,{text:'CLEANTRACK|'+z.id+'|'+z.name+'|'+z.client,width:150,height:150,colorDark:'#000',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M});
+    items.push({z:z,box:box});
+  });
+  setTimeout(function(){
+    let html='<html><head><title>QR zone CleanTrack</title><meta charset="utf-8"><style>'+
+      'body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:12px;}'+
+      'h1{font-size:16px;margin:0 0 12px;}'+
+      '.grid{display:flex;flex-wrap:wrap;gap:10px;}'+
+      '.card{width:180px;border:1px solid #bbb;border-radius:8px;padding:10px;text-align:center;page-break-inside:avoid;}'+
+      '.card img{width:150px;height:150px;}'+
+      '.card h3{font-size:13px;margin:8px 0 2px;line-height:1.2;}'+
+      '.card p{font-size:11px;color:#555;margin:1px 0;}'+
+      '</style></head><body>'+
+      '<h1>QR zone — '+escHtml(zoneFilter&&zoneFilter!=='all'?zoneFilter:'Tutti i clienti')+(zoneFreqFilter&&zoneFreqFilter!=='all'?' · '+escHtml(zoneFreqFilter):'')+' ('+items.length+')</h1><div class="grid">';
+    items.forEach(function(o){
+      const c=o.box.querySelector('canvas');
+      const src=c?c.toDataURL('image/png'):'';
+      html+='<div class="card"><img src="'+src+'"><h3>'+escHtml(o.z.name)+'</h3><p>'+escHtml(o.z.client)+'</p><p>'+escHtml(o.z.floor||'')+(o.z.type?' · '+escHtml(o.z.type):'')+'</p></div>';
+    });
+    html+='</div><script>window.onload=function(){setTimeout(function(){window.print();},250);};<\/script></body></html>';
+    const w=window.open('','_blank');
+    if(!w){showToast('Consenti i popup per stampare',false);if(tmp.parentNode)document.body.removeChild(tmp);return;}
+    w.document.write(html);
+    w.document.close();
+    setTimeout(function(){if(tmp.parentNode)document.body.removeChild(tmp);},1000);
+  },350);
+}
+function escHtml(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
 // ══ EXCEL ══
 async function exportExcel(){
